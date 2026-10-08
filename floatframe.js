@@ -12,6 +12,56 @@
     if (!/^https?:\/\//i.test(u)) u = "https://" + u;
     return u;
   };
+  const getDomain = (u) => u.replace(/^https?:\/\/(www\.)?/, "").split("/")[0];
+
+  // === Icône (favicon) d'un site, avec la lettre en secours ===
+  const makeIcon = (fav, size) => {
+    const domain = getDomain(fav.url);
+    const sources = [
+      `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
+      `https://${domain}/favicon.ico`,
+    ];
+
+    const box = document.createElement("div");
+    Object.assign(box.style, {
+      width: size + "px",
+      height: size + "px",
+      lineHeight: size + "px",
+      borderRadius: "50%",
+      background: "#222",
+      color: "#fff",
+      fontWeight: "bold",
+      fontSize: Math.round(size * 0.5) + "px",
+      textAlign: "center",
+      overflow: "hidden",
+      flexShrink: "0",
+    });
+    box.textContent = (fav.name[0] || "?").toUpperCase();
+
+    let i = 0;
+    const img = new Image();
+    img.onload = () => {
+      box.textContent = "";
+      box.style.background = "#fff";
+      box.style.border = "1px solid #ddd";
+      box.style.boxSizing = "border-box";
+      Object.assign(img.style, {
+        width: "65%",
+        height: "65%",
+        margin: "17% auto 0",
+        display: "block",
+        objectFit: "contain",
+      });
+      box.appendChild(img);
+    };
+    img.onerror = () => {
+      i++;
+      if (i < sources.length) img.src = sources[i];
+    };
+    img.src = sources[0];
+
+    return box;
+  };
 
   // Nettoyer une éventuelle instance précédente
   document.getElementById("__floatFrameWrapper")?.remove();
@@ -68,7 +118,7 @@
   });
 
   const title = document.createElement("span");
-  title.textContent = "FloatFrame";
+  title.textContent = "FloatFrame – Hub";
   Object.assign(title.style, {
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -100,7 +150,7 @@
   btnGroup.append(minimizeBtn, maximizeBtn, closeBtn);
   header.append(title, btnGroup);
 
-  // === Barre des boutons de sites ===
+  // === Barre des boutons de sites (en haut) ===
   const siteBar = document.createElement("div");
   Object.assign(siteBar.style, {
     display: "flex",
@@ -158,32 +208,79 @@
   resetBtn.title = "Réinitialiser les favoris";
   linkBar.append(input, goBtn, addBtn, resetBtn);
 
-  // === Iframe (avec plein écran autorisé) ===
+  // === Zone de contenu : Hub + Iframe ===
+  const content = document.createElement("div");
+  Object.assign(content.style, {
+    flex: "1",
+    position: "relative",
+    minHeight: "0",
+    display: "flex",
+  });
+
+  // --- Hub ---
+  const hub = document.createElement("div");
+  Object.assign(hub.style, {
+    flex: "1",
+    overflowY: "auto",
+    padding: "14px",
+    background: "#fafafa",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+    gap: "12px",
+    alignContent: "start",
+  });
+
+  // --- Iframe (avec plein écran autorisé) ---
   const iframe = document.createElement("iframe");
   iframe.allowFullscreen = true;
   iframe.setAttribute(
     "allow",
     "fullscreen; autoplay; picture-in-picture; encrypted-media; clipboard-write"
   );
-  Object.assign(iframe.style, { flex: "1", border: "none", width: "100%" });
+  Object.assign(iframe.style, {
+    flex: "1",
+    border: "none",
+    width: "100%",
+    display: "none",
+  });
+
+  content.append(hub, iframe);
+
+  // === Navigation Hub <-> Site ===
+  const showHub = () => {
+    iframe.src = "about:blank"; // coupe la vidéo / le son
+    iframe.style.display = "none";
+    hub.style.display = "grid";
+    title.textContent = "FloatFrame – Hub";
+  };
 
   const openUrl = (u) => {
     const full = normalizeUrl(u);
+    hub.style.display = "none";
+    iframe.style.display = "block";
     iframe.src = full;
     title.textContent = full.replace(/^https?:\/\//, "");
   };
 
-  // === Affichage des boutons de sites ===
+  // === Affichage du hub + de la barre de sites ===
   function renderSites() {
-    siteBar.innerHTML = "";
     const favs = loadFavorites();
-    if (favs.length === 0) {
-      const empty = document.createElement("span");
-      empty.textContent = "Aucun site. Ajoute un lien ci-dessous.";
-      empty.style.color = "#777";
-      siteBar.appendChild(empty);
-      return;
-    }
+
+    // --- Barre du haut ---
+    siteBar.innerHTML = "";
+
+    const homeChip = document.createElement("div");
+    homeChip.textContent = "🏠 Hub";
+    Object.assign(homeChip.style, {
+      background: "#0a66c2",
+      color: "#fff",
+      borderRadius: "14px",
+      padding: "4px 10px",
+      cursor: "pointer",
+    });
+    homeChip.onclick = showHub;
+    siteBar.appendChild(homeChip);
+
     favs.forEach((fav, i) => {
       const chip = document.createElement("div");
       Object.assign(chip.style, {
@@ -192,7 +289,7 @@
         background: "#222",
         color: "#fff",
         borderRadius: "14px",
-        padding: "4px 10px",
+        padding: "4px 10px 4px 5px",
         cursor: "pointer",
         gap: "6px",
       });
@@ -212,8 +309,73 @@
       };
 
       chip.onclick = () => openUrl(fav.url);
-      chip.append(label, removeX);
+      chip.append(makeIcon(fav, 18), label, removeX);
       siteBar.appendChild(chip);
+    });
+
+    // --- Cartes du hub ---
+    hub.innerHTML = "";
+    if (favs.length === 0) {
+      const empty = document.createElement("div");
+      empty.textContent = "Aucun site pour l'instant. Colle un lien ci-dessus puis clique sur ★ Ajouter.";
+      Object.assign(empty.style, {
+        gridColumn: "1 / -1",
+        color: "#777",
+        textAlign: "center",
+        padding: "30px 10px",
+      });
+      hub.appendChild(empty);
+      return;
+    }
+
+    favs.forEach((fav) => {
+      const card = document.createElement("div");
+      Object.assign(card.style, {
+        background: "#fff",
+        border: "1px solid #ddd",
+        borderRadius: "10px",
+        padding: "14px 8px",
+        textAlign: "center",
+        cursor: "pointer",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+        transition: "transform 0.1s, box-shadow 0.1s",
+      });
+      card.onmouseenter = () => {
+        card.style.transform = "translateY(-2px)";
+        card.style.boxShadow = "0 4px 10px rgba(0,0,0,0.15)";
+      };
+      card.onmouseleave = () => {
+        card.style.transform = "none";
+        card.style.boxShadow = "0 1px 4px rgba(0,0,0,0.08)";
+      };
+
+      const icon = makeIcon(fav, 42);
+      icon.style.margin = "0 auto 8px";
+
+      const name = document.createElement("div");
+      name.textContent = fav.name;
+      Object.assign(name.style, {
+        fontWeight: "bold",
+        color: "#222",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      });
+
+      const domain = document.createElement("div");
+      domain.textContent = getDomain(fav.url);
+      Object.assign(domain.style, {
+        fontSize: "11px",
+        color: "#888",
+        marginTop: "2px",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      });
+
+      card.onclick = () => openUrl(fav.url);
+      card.append(icon, name, domain);
+      hub.appendChild(card);
     });
   }
 
@@ -227,8 +389,7 @@
   addBtn.onclick = () => {
     if (!input.value.trim()) return;
     const full = normalizeUrl(input.value);
-    const defaultName = full.replace(/^https?:\/\/(www\.)?/, "").split("/")[0];
-    const name = prompt("Nom du bouton :", defaultName);
+    const name = prompt("Nom du site :", getDomain(full));
     if (!name) return;
     const favs = loadFavorites();
     favs.push({ name, url: full });
@@ -243,14 +404,10 @@
     }
   };
 
-  // === Assemblage ===
-  wrapper.append(header, siteBar, linkBar, iframe);
+  // === Assemblage (le hub s'affiche au lancement, aucun site n'est ouvert) ===
+  wrapper.append(header, siteBar, linkBar, content);
   document.body.appendChild(wrapper);
   renderSites();
-
-  // Ouvre automatiquement le premier site de la liste
-  const first = loadFavorites()[0];
-  if (first) openUrl(first.url);
 
   // === Bulle (mode réduit) ===
   const bubble = document.createElement("div");
