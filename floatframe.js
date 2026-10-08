@@ -317,8 +317,22 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   // Contenu
   const hub = h("div", { class: "hub" });
   const frame = h("iframe", { class: "frame" });
+
+  // === Toutes les permissions pour jouer (caméra, micro, manette, plein écran...) ===
+  frame.setAttribute(
+    "allow",
+    [
+      "camera *", "microphone *", "geolocation *", "fullscreen *", "autoplay *",
+      "clipboard-read *", "clipboard-write *", "display-capture *",
+      "encrypted-media *", "picture-in-picture *", "screen-wake-lock *",
+      "gamepad *", "keyboard-map *", "midi *", "accelerometer *", "gyroscope *",
+      "magnetometer *", "xr-spatial-tracking *", "web-share *", "speaker-selection *",
+      "hid *", "serial *", "usb *", "bluetooth *", "idle-detection *",
+      "payment *", "publickey-credentials-get *", "storage-access *",
+    ].join("; ")
+  );
   frame.allowFullscreen = true;
-  frame.setAttribute("allow", "fullscreen; autoplay; picture-in-picture; encrypted-media; clipboard-write");
+
   const stage = h("div", { class: "stage" }, hub, frame);
 
   const grip = h("div", { class: "grip" });
@@ -443,6 +457,14 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
 
   frame.addEventListener("load", () => { if (current) setLoading(false); });
 
+  // === Focus clavier dans l'iframe (pour les jeux : Eaglercraft, etc.) ===
+  const focusFrame = () => {
+    try { frame.focus(); frame.contentWindow.focus(); } catch {}
+  };
+  frame.addEventListener("load", () => setTimeout(focusFrame, 100));
+  stage.addEventListener("pointerdown", focusFrame);
+  stage.addEventListener("mouseenter", () => { if (current) focusFrame(); });
+
   // === Gestion des favoris ===
   function removeFav(i) {
     const [r] = favs.splice(i, 1);
@@ -563,7 +585,10 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   };
 
   // Page entière : la fenêtre prend toute la page, sans barre de titre ni favoris
-  const setFull = (on) => win.classList.toggle("full", on);
+  const setFull = (on) => {
+    win.classList.toggle("full", on);
+    setTimeout(focusFrame, 50);
+  };
   btnFull.onclick = () => {
     if (!current) { toast("Ouvre d'abord un site"); return; }
     setFull(true);
