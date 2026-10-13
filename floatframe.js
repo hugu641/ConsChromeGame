@@ -32,6 +32,9 @@
     { name: "Hedgewars", url: "https://webwars.link" },
     { name: "More GTA / Minecraft", url: "https://wasmarcade.com/" },
   ];
+    { name: "Mario Kart 8", url: "https://mariokart8.online" },
+  ];
+
 
   const STORAGE_KEY = "__floatFrameFavorites";
   const HOST_ID = "__floatFrameHost";
