@@ -1,42 +1,9 @@
 (() => {
-  // === SITES PAR DÉFAUT (modifie cette liste comme tu veux) ===
-  const DEFAULT_SITES = [
-    { name: "FrAnime", url: "https://franime.fr" },
-    { name: "BrainworxEdu", url: "https://brainworxedu.github.io" },
-    { name: "KartBros", url: "https://kartbros.io" },
-    { name: "BikeBros", url: "https://bikebros.io" },
-    { name: "Fortnite de la S", url: "https://2v2.io" },
-    { name: "Roblox", url: "https://bloxity.io/" },
-    { name: "BO1 Zombies", url: "https://vel.gg/bo1z" },
-    { name: "Moon", url: "https://moon-zombies.pages.dev" },
-    { name: "Kino der Toten", url: "https://kino-der-toten.pages.dev" },
-    { name: "BO3 Cheese Cube", url: "https://cheese-cube.pages.dev" },
-    { name: "Black Ops 2", url: "https://vibeslops.luckeysystems.com" },
-    { name: "Modern Warfare 2", url: "https://ovz-game-production.up.railway.app" },
-    { name: "Skate 3", url: "https://skate.aaddpp.lol" },
-    { name: "Skate Rust", url: "https://global-terror.net" },
-    { name: "CS Surf", url: "https://surfd.net" },
-    { name: "Halo CE", url: "https://mitchellhynes.com/halo" },
-    { name: "Halo CE mobile", url: "https://hcemobile.com" },
-    { name: "PES 6", url: "https://pes6.optijuegos.net" },
-    { name: "GTA 5", url: "https://web.archive.org/web/20261006055917/https://playgta5.com/" },
-    { name: "GTA Vice City", url: "https://joncodeofficial.github.io/gta-vice-city-wasm" },
-    { name: "The Simpsons: Hit & Run", url: "https://shar-wasm.cjoseph.workers.dev/?skipmovie" },
-    { name: "Quake 1", url: "https://q1.pieter.com" },
-    { name: "Quake 2", url: "https://q2.pieter.com" },
-    { name: "Quake 3", url: "https://q3.pieter.com" },
-    { name: "Return to Castle Wolfenstein", url: "https://rtcw.pieter.com" },
-    { name: "Unreal Tournament", url: "https://ut.pieter.com" },
-    { name: "Half Life", url: "https://pixelsuft.github.io/hl/" },
-    { name: "Half Life / CS 1.6", url: "https://x8bitrain.github.io/webXash/" },
-    { name: "Diablo", url: "https://johnimril.github.io/diablo_web/" },
-    { name: "Hedgewars", url: "https://webwars.link" },
-    { name: "More GTA / Minecraft", url: "https://wasmarcade.com/" },
-    { name: "Mario Kart 8", url: "https://mariokart8.online" },
-  ];
-
-
   const STORAGE_KEY = "__floatFrameFavorites";
+  const SITES_URL = "https://raw.githubusercontent.com/hugu641/ConsChromeGame/main/sites.json";
+  const SEEN_KEY = "__floatFrameSeen";
+  const REFRESH_MS = 5 * 60 * 1000; // mise à jour du JSON toutes les 5 min
+  const ADBLOCK_KEY = "__floatFrameAdblock";
   const HOST_ID = "__floatFrameHost";
 
   // Nettoyer les instances précédentes (anciennes versions comprises)
@@ -94,6 +61,7 @@
     link: "M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1",
     arrow: "M5 12h14M13 6l6 6-6 6",
     reset: "M3 12a9 9 0 1 0 3-6.7M3 4v5h5",
+    shield: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
   };
   const NS = "http://www.w3.org/2000/svg";
   const ico = (d, size = 16) => {
@@ -113,7 +81,7 @@
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
       if (Array.isArray(saved)) return saved;
     } catch {}
-    return DEFAULT_SITES.map((s) => ({ ...s }));
+    return [];
   };
   let favs = readStorage();
   const persist = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(favs)); } catch {} };
@@ -188,6 +156,8 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
 .btn:hover{background:rgba(255,255,255,.12);color:#fff;transform:translateY(-1px)}
 .btn.on{color:#ffc542;background:rgba(255,197,66,.12);border-color:rgba(255,197,66,.4)}
 .btn.on svg{fill:#ffc542}
+.btn.shield.on{color:#3ddc97;background:rgba(61,220,151,.12);border-color:rgba(61,220,151,.4)}
+.btn.shield.on svg{fill:none}
 .url{flex:1;min-width:0;height:36px;display:flex;align-items:center;gap:8px;padding:0 4px 0 12px;border-radius:11px;
   background:rgba(0,0,0,.32);border:1px solid var(--line);color:var(--mut);transition:.15s}
 .url:focus-within{border-color:rgba(124,92,255,.8);box-shadow:0 0 0 3px rgba(124,92,255,.22);color:#fff}
@@ -335,12 +305,13 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   const input = h("input", { type: "text", placeholder: "Colle un lien (ex: monsite.com)", spellcheck: "false", autocomplete: "off" });
   const btnGo = h("button", { class: "go", title: "Ouvrir" }, ico(P.arrow, 16));
   const btnStar = h("button", { class: "btn", title: "Ajouter au hub" }, ico(P.star, 17));
-  const btnFull = h("button", { class: "btn", title: "Page entière" }, ico(P.full, 16));
+  const btnShield = h("button", { class: "btn shield", title: "Anti-pub (Alt+A)" }, ico(P.shield, 16));
+  const btnFull = h("button", { class: "btn", title: "Page entière (Alt+Z)" }, ico(P.full, 16));
   const btnExit = h("button", { class: "exitfs", title: "Quitter (Échap)" }, ico(P.exitfull, 18));
   const addr = h("div", { class: "addr" },
     btnHome, btnReload,
     h("div", { class: "url" }, ico(P.link, 15), input, btnGo),
-    btnStar, btnFull
+    btnStar, btnShield, btnFull
   );
 
   // Contenu
@@ -361,6 +332,18 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     ].join("; ")
   );
   frame.allowFullscreen = true;
+
+  // === Anti-pub : sandbox sans allow-popups / allow-top-navigation (bloque popups et redirections) ===
+  const SANDBOX = "allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-modals allow-downloads allow-presentation allow-orientation-lock";
+  let adblock = true;
+  try { adblock = localStorage.getItem(ADBLOCK_KEY) !== "0"; } catch {}
+  const applyAdblock = () => {
+    if (adblock) frame.setAttribute("sandbox", SANDBOX);
+    else frame.removeAttribute("sandbox");
+    btnShield.classList.toggle("on", adblock);
+    btnShield.title = "Anti-pub " + (adblock ? "activé" : "désactivé") + " (Alt+A)";
+  };
+  applyAdblock();
 
   const stage = h("div", { class: "stage" }, hub, frame);
 
@@ -544,11 +527,14 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
       onclick: async () => {
         const yes = await ask({
           title: "Réinitialiser le hub ?",
-          message: "Tes sites seront remplacés par la liste par défaut.",
+          message: "Tes sites seront remplacés par la liste de sites.json.",
           ok: "Réinitialiser", danger: true,
         });
         if (!yes) return;
-        favs = DEFAULT_SITES.map((s) => ({ ...s }));
+        const list = await fetchSites();
+        if (!list) { toast("Impossible de charger sites.json"); return; }
+        favs = list.map((s) => ({ name: s.name, url: s.url }));
+        try { localStorage.setItem(SEEN_KEY, JSON.stringify(favs.map((f) => getDomain(f.url)))); } catch {}
         persist();
         render();
         updateStar();
@@ -611,6 +597,14 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   btnStar.onclick = () => {
     if (current && favs.some((f) => sameSite(f.url, current))) { toast("Déjà dans ton hub"); return; }
     addFromInput();
+  };
+
+  btnShield.onclick = () => {
+    adblock = !adblock;
+    try { localStorage.setItem(ADBLOCK_KEY, adblock ? "1" : "0"); } catch {}
+    applyAdblock();
+    toast(adblock ? "Anti-pub activé" : "Anti-pub désactivé");
+    if (current) { setLoading(true); frame.src = current; }
   };
 
   // Page entière : la fenêtre prend toute la page, sans barre de titre ni favoris
@@ -678,6 +672,79 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   const endResize = () => { rs = null; win.classList.remove("busy"); };
   grip.addEventListener("pointerup", endResize);
   grip.addEventListener("pointercancel", endResize);
+
+  // === Favoris en temps réel : synchro entre onglets du même site ===
+  window.addEventListener("storage", (e) => {
+    if (!host.isConnected || e.key !== STORAGE_KEY) return;
+    favs = readStorage();
+    render();
+    updateStar();
+  });
+
+  // === Favoris en temps réel : nouveaux sites depuis sites.json (GitHub), sans écraser ta liste ===
+  async function fetchSites() {
+    try {
+      const r = await fetch(SITES_URL + "?t=" + Date.now(), { cache: "no-store" });
+      if (!r.ok) return null;
+      const list = await r.json();
+      return Array.isArray(list) ? list.filter((s) => s && s.name && s.url) : null;
+    } catch { return null; }
+  }
+  const syncRemote = async () => {
+    try {
+      const list = await fetchSites();
+      if (!list) return;
+      let seen = null;
+      try { seen = JSON.parse(localStorage.getItem(SEEN_KEY)); } catch {}
+      if (!Array.isArray(seen)) seen = favs.map((f) => getDomain(f.url));
+      let added = 0;
+      for (const s of list) {
+        const d = getDomain(s.url);
+        if (seen.includes(d)) continue;
+        seen.push(d);
+        if (!favs.some((f) => sameSite(f.url, s.url))) { favs.push({ name: s.name, url: s.url }); added++; }
+      }
+      try { localStorage.setItem(SEEN_KEY, JSON.stringify(seen)); } catch {}
+      if (added) {
+        persist();
+        render();
+        updateStar();
+        toast(`${added} nouveau${added > 1 ? "x" : ""} site${added > 1 ? "s" : ""} ajouté${added > 1 ? "s" : ""}`);
+      }
+    } catch {}
+  };
+  syncRemote();
+  const syncTimer = setInterval(() => { host.isConnected ? syncRemote() : clearInterval(syncTimer); }, REFRESH_MS);
+
+  // === Raccourcis clavier (Alt + ...) — actifs quand le focus n'est pas dans le jeu ===
+  // Alt+S ajouter/retirer le site actuel · Alt+1..9 ouvrir un favori · Alt+H hub
+  // Alt+R recharger · Alt+Z page entière · Alt+A anti-pub · Alt+M réduire/rouvrir
+  document.addEventListener("keydown", (e) => {
+    if (!host.isConnected || !e.altKey || e.ctrlKey || e.metaKey) return;
+    const code = e.code;
+    const hidden = win.classList.contains("hidden");
+    let handled = true;
+    if (code === "KeyM") { hidden ? bubble.click() : btnMin.click(); }
+    else if (hidden) handled = false;
+    else if (code === "KeyH") showHub();
+    else if (code === "KeyR") btnReload.click();
+    else if (code === "KeyZ") { win.classList.contains("full") ? setFull(false) : btnFull.click(); }
+    else if (code === "KeyA") btnShield.click();
+    else if (code === "KeyS") {
+      if (!current) toast("Ouvre d'abord un site");
+      else {
+        const i = favs.findIndex((f) => sameSite(f.url, current));
+        if (i >= 0) removeFav(i);
+        else { input.value = current; addFromInput(); }
+      }
+    }
+    else if (/^Digit[1-9]$/.test(code)) {
+      const f = favs[Number(code.slice(5)) - 1];
+      if (f) openUrl(f.url); else toast("Pas de favori n°" + code.slice(5));
+    }
+    else handled = false;
+    if (handled) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
 
   // === Démarrage : le hub s'affiche, aucun site n'est ouvert ===
   render();
