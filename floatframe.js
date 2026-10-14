@@ -98,7 +98,6 @@
 button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size:inherit}
 @keyframes pop{from{opacity:0;transform:scale(.93) translateY(12px)}to{opacity:1;transform:none}}
 @keyframes rise{from{opacity:0;transform:translateY(14px) scale(.95)}to{opacity:1;transform:none}}
-@keyframes ring{0%{transform:scale(.9);opacity:.7}100%{transform:scale(1.7);opacity:0}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 
 .win{--bg:rgba(15,17,26,.94);--line:rgba(255,255,255,.08);--txt:#eef0f8;--mut:#8b90a8;--a1:#7c5cff;--a2:#00d4ff;
@@ -232,11 +231,19 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   font-size:12.5px;opacity:0;pointer-events:none;transition:.25s;z-index:50;white-space:nowrap}
 .toast.on{opacity:1;transform:translate(-50%,0)}
 
-.bubble{position:fixed;right:24px;bottom:24px;width:56px;height:56px;border-radius:50%;display:none;place-items:center;color:#fff;
-  background:linear-gradient(135deg,#7c5cff,#00d4ff);box-shadow:0 10px 30px rgba(124,92,255,.5);transition:transform .2s;animation:pop .3s}
-.bubble.on{display:grid}
-.bubble:hover{transform:scale(1.1)}
-.bubble .ring{position:absolute;inset:0;border-radius:50%;border:2px solid #7c5cff;animation:ring 2s infinite;pointer-events:none}
+/* Bouton réduit : zone cachée en haut au centre, le bouton apparaît au survol */
+.bubble{position:fixed;top:0;left:50%;transform:translateX(-50%);width:180px;height:30px;display:none;padding:0;
+  background:none;border:0;cursor:pointer;color:#fff}
+.bubble.on{display:block}
+.bubble::before{content:"";position:absolute;top:0;left:50%;width:40px;height:3px;transform:translateX(-50%);
+  border-radius:0 0 4px 4px;background:rgba(255,255,255,.25);transition:opacity .2s}
+.bubble:hover::before,.bubble:focus-visible::before{opacity:0}
+.bubble .pill{position:absolute;top:0;left:50%;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;
+  background:linear-gradient(135deg,#7c5cff,#00d4ff);box-shadow:0 10px 30px rgba(124,92,255,.5);
+  transform:translate(-50%,-130%);opacity:0;pointer-events:none;
+  transition:transform .28s cubic-bezier(.2,.9,.3,1.2),opacity .2s}
+.bubble:hover .pill,.bubble:focus-visible .pill{transform:translate(-50%,10px);opacity:1;pointer-events:auto}
+.bubble:active .pill{transform:translate(-50%,10px) scale(.94)}
 `;
   try {
     const sheet = new CSSStyleSheet();
@@ -352,8 +359,9 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   const toastEl = h("div", { class: "toast" });
   win.append(bar, prog, tabs, addr, stage, grip, modal, toastEl, btnExit);
 
-  const bubble = h("button", { class: "bubble", title: "Rouvrir FloatFrame" },
-    h("span", { class: "ring" }), ico(P.globe, 24));
+  // Bouton réduit : discret, apparaît en haut au centre au survol
+  const bubble = h("button", { class: "bubble", title: "Rouvrir FloatFrame (Alt+M)" },
+    h("span", { class: "pill" }, ico(P.globe, 22)));
 
   root.append(win, bubble);
   document.body.appendChild(host);
