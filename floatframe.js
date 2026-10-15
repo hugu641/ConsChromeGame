@@ -1,6 +1,6 @@
 (() => {
   const STORAGE_KEY = "__floatFrameFavorites";
-  const SITES_URL = "https://raw.githubusercontent.com/hugu641/ConsChromeGame/main/sites.json";
+  const SITES_URL = "https://raw.githubusercontent.com/hugu641/ConsChromeGame/refs/heads/main/sites.json";
   const SEEN_KEY = "__floatFrameSeen";
   const REFRESH_MS = 5 * 60 * 1000; // mise à jour du JSON toutes les 5 min
   const ADBLOCK_KEY = "__floatFrameAdblock";
