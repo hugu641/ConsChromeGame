@@ -1,8 +1,8 @@
 (() => {
   const STORAGE_KEY = "__floatFrameFavorites";
   const SITES_URL = "https://raw.githubusercontent.com/hugu641/ConsChromeGame/refs/heads/main/sites.json";
-  const SEEN_KEY = "__floatFrameSeen";
-  const REFRESH_MS = 5 * 60 * 1000; // mise à jour du JSON toutes les 5 min
+  const REMOTE_KEY = "__floatFrameRemote"; // domaines venant de sites.json
+  const REFRESH_MS = 2 * 60 * 1000; // mise à jour du JSON toutes les 2 min
   const ADBLOCK_KEY = "__floatFrameAdblock";
   const HOST_ID = "__floatFrameHost";
 
@@ -542,7 +542,7 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
         const list = await fetchSites();
         if (!list) { toast("Impossible de charger sites.json"); return; }
         favs = list.map((s) => ({ name: s.name, url: s.url }));
-        try { localStorage.setItem(SEEN_KEY, JSON.stringify(favs.map((f) => getDomain(f.url)))); } catch {}
+        try { localStorage.setItem(REMOTE_KEY, JSON.stringify(favs.map((f) => getDomain(f.url)))); } catch {}
         persist();
         render();
         updateStar();
@@ -689,37 +689,53 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     updateStar();
   });
 
-  // === Favoris en temps réel : nouveaux sites depuis sites.json (GitHub), sans écraser ta liste ===
+  // === Synchro avec sites.json (GitHub) : au lancement puis toutes les 2 min ===
   async function fetchSites() {
     try {
       const r = await fetch(SITES_URL + "?t=" + Date.now(), { cache: "no-store" });
-      if (!r.ok) return null;
+      if (!r.ok) { console.error("[FloatFrame] HTTP", r.status, r.statusText); return null; }
       const list = await r.json();
-      return Array.isArray(list) ? list.filter((s) => s && s.name && s.url) : null;
-    } catch { return null; }
+      if (!Array.isArray(list)) { console.error("[FloatFrame] sites.json n'est pas un tableau:", list); return null; }
+      return list.filter((s) => s && s.name && s.url);
+    } catch (err) {
+      console.error("[FloatFrame] fetch échoué (CSP, réseau ou JSON invalide):", err);
+      return null;
+    }
   }
+
   const syncRemote = async () => {
-    try {
-      const list = await fetchSites();
-      if (!list) return;
-      let seen = null;
-      try { seen = JSON.parse(localStorage.getItem(SEEN_KEY)); } catch {}
-      if (!Array.isArray(seen)) seen = favs.map((f) => getDomain(f.url));
-      let added = 0;
-      for (const s of list) {
-        const d = getDomain(s.url);
-        if (seen.includes(d)) continue;
-        seen.push(d);
-        if (!favs.some((f) => sameSite(f.url, s.url))) { favs.push({ name: s.name, url: s.url }); added++; }
-      }
-      try { localStorage.setItem(SEEN_KEY, JSON.stringify(seen)); } catch {}
-      if (added) {
-        persist();
-        render();
-        updateStar();
-        toast(`${added} nouveau${added > 1 ? "x" : ""} site${added > 1 ? "s" : ""} ajouté${added > 1 ? "s" : ""}`);
-      }
-    } catch {}
+    const list = await fetchSites();
+    if (!list) return;
+
+    let prev = [];
+    try { prev = JSON.parse(localStorage.getItem(REMOTE_KEY)) || []; } catch {}
+    const domains = list.map((s) => getDomain(s.url));
+
+    let added = 0, updated = 0, removed = 0;
+
+    // Ajoute les sites manquants, met à jour nom/lien des existants
+    for (const s of list) {
+      const f = favs.find((x) => sameSite(x.url, s.url));
+      if (!f) { favs.push({ name: s.name, url: s.url }); added++; }
+      else if (f.name !== s.name || f.url !== s.url) { f.name = s.name; f.url = s.url; updated++; }
+    }
+
+    // Retire les sites qui venaient du JSON et n'y sont plus (tes sites perso restent)
+    const before = favs.length;
+    favs = favs.filter((f) => {
+      const d = getDomain(f.url);
+      return !(prev.includes(d) && !domains.includes(d));
+    });
+    removed = before - favs.length;
+
+    try { localStorage.setItem(REMOTE_KEY, JSON.stringify(domains)); } catch {}
+
+    if (added || updated || removed) {
+      persist();
+      render();
+      updateStar();
+      toast(`Hub mis à jour (+${added} / ~${updated} / -${removed})`);
+    }
   };
   syncRemote();
   const syncTimer = setInterval(() => { host.isConnected ? syncRemote() : clearInterval(syncTimer); }, REFRESH_MS);
