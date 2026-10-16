@@ -1,6 +1,6 @@
 // FloatFrame Casino : interface. Chargé à la demande par floatframe.js (reçoit `ctx`).
 // Aucune règle de jeu ici : le serveur tire les résultats et tient les soldes.
-const API = "https://floatframe-casino.REMPLACE.workers.dev"; // <- URL de ton Worker Cloudflare
+const API = "https://floatframe-casino.hug6314.workers.dev"; // <- URL de ton Worker Cloudflare
 
 const { h, toast, pane } = ctx;
 const TK = "__floatFrameCasinoToken";
