@@ -1,7 +1,7 @@
 (() => {
   const STORAGE_KEY = "__floatFrameFavorites";
   const SITES_URL = "https://raw.githubusercontent.com/hugu641/ConsChromeGame/refs/heads/main/sites.json";
-  const CASINO_URL = "https://raw.githubusercontent.com/hugu641/ConsChromeGame/refs/heads/casino/casino.js";
+  const CASINO_URL = "https://raw.githubusercontent.com/hugu641/ConsChromeGame/refs/heads/main/casino.js";
   const REMOTE_KEY = "__floatFrameRemote"; // domaines venant de sites.json
   const REFRESH_MS = 2 * 60 * 1000; // mise à jour du JSON toutes les 2 min
   const ADBLOCK_KEY = "__floatFrameAdblock";
