@@ -1,6 +1,7 @@
 (() => {
   const STORAGE_KEY = "__floatFrameFavorites";
   const SITES_URL = "https://raw.githubusercontent.com/hugu641/ConsChromeGame/refs/heads/main/sites.json";
+  const CASINO_URL = "https://raw.githubusercontent.com/hugu641/ConsChromeGame/refs/heads/casino/casino.js";
   const REMOTE_KEY = "__floatFrameRemote"; // domaines venant de sites.json
   const REFRESH_MS = 2 * 60 * 1000; // mise à jour du JSON toutes les 2 min
   const ADBLOCK_KEY = "__floatFrameAdblock";
@@ -171,6 +172,8 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   background:radial-gradient(520px 260px at 0% 0%,rgba(124,92,255,.2),transparent 70%),
              radial-gradient(460px 260px at 100% 100%,rgba(0,212,255,.15),transparent 70%)}
 .hub.off{display:none}
+.casino{display:none;flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
+.casino.on{display:block}
 .hub-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:16px}
 .hub-head h2{margin:0;font-size:22px;font-weight:750;letter-spacing:-.3px;
   background:linear-gradient(90deg,#fff,#b9a8ff);-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -323,6 +326,7 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
 
   // Contenu
   const hub = h("div", { class: "hub" });
+  const casinoPane = h("div", { class: "casino" });
   const frame = h("iframe", { class: "frame" });
 
   // === Toutes les permissions pour jouer (caméra, micro, manette, plein écran...) ===
@@ -352,7 +356,7 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   };
   applyAdblock();
 
-  const stage = h("div", { class: "stage" }, hub, frame);
+  const stage = h("div", { class: "stage" }, hub, casinoPane, frame);
 
   const grip = h("div", { class: "grip" });
   const modal = h("div", { class: "modal" });
@@ -446,8 +450,13 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     btnStar.classList.toggle("on", !!saved);
   };
 
+  let casinoOn = false;
+  let casinoMod = null;
+
   function showHub() {
     current = null;
+    casinoOn = false;
+    casinoPane.classList.remove("on");
     win.classList.remove("full");
     frame.src = "about:blank";
     frame.classList.remove("on");
@@ -460,9 +469,38 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     updateStar();
   }
 
+  async function openCasino() {
+    current = null;
+    casinoOn = true;
+    win.classList.remove("full");
+    frame.src = "about:blank";
+    frame.classList.remove("on");
+    hub.classList.add("off");
+    casinoPane.classList.add("on");
+    setLoading(false);
+    input.value = "";
+    titleMain.textContent = "Casino";
+    titleSub.textContent = "Monnaie virtuelle · jeux gérés par le serveur";
+    render();
+    updateStar();
+    try {
+      if (!casinoMod) {
+        const r = await fetch(CASINO_URL + "?t=" + Date.now(), { cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        casinoMod = new Function("ctx", await r.text())({ h, toast, ask, pane: casinoPane });
+      }
+      if (casinoOn) await casinoMod.open();
+    } catch (e) {
+      casinoMod = null;
+      casinoPane.replaceChildren(h("p", { style: "padding:24px;text-align:center;color:#ff5d73", text: "Casino indisponible : " + (e.message || e) }));
+    }
+  }
+
   function openUrl(u) {
     const full = normalizeUrl(u);
     current = full;
+    casinoOn = false;
+    casinoPane.classList.remove("on");
     hub.classList.add("off");
     frame.classList.add("on");
     setLoading(true);
@@ -515,7 +553,7 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   // === Rendu ===
   function render() {
     // Onglets
-    const home = h("button", { class: "chip home" + (current ? "" : " active"), onclick: showHub },
+    const home = h("button", { class: "chip home" + (current || casinoOn ? "" : " active"), onclick: showHub },
       ico(P.home, 14), h("span", { text: "Hub" }));
     tabs.replaceChildren(
       home,
@@ -572,14 +610,23 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
       return card;
     });
 
+    const casinoTile = h("div", { class: "card", role: "button", tabindex: "0" },
+      h("div", { class: "ico", style: "width:54px;height:54px;font-size:30px;display:grid;place-items:center;border-radius:16px;background:linear-gradient(135deg,#ffc83d,#ff5d73)", text: "🎰" }),
+      h("div", { class: "nm", text: "Casino" }),
+      h("div", { class: "dm", text: "jetons virtuels" })
+    );
+    casinoTile.style.setProperty("--i", favs.length);
+    casinoTile.addEventListener("click", openCasino);
+    casinoTile.addEventListener("keydown", (e) => { if (e.key === "Enter") openCasino(); });
+
     const addTile = h("button", { class: "card add", onclick: () => input.focus() },
       h("div", { class: "plus" }, ico(P.plus, 22)),
       h("div", { class: "nm", text: "Ajouter un site" }),
       h("div", { class: "dm", text: "Colle un lien en haut" })
     );
-    addTile.style.setProperty("--i", favs.length);
+    addTile.style.setProperty("--i", favs.length + 1);
 
-    hub.replaceChildren(head, h("div", { class: "grid" }, ...cards, addTile));
+    hub.replaceChildren(head, h("div", { class: "grid" }, ...cards, casinoTile, addTile));
   }
 
   // === Actions ===
