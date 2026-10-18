@@ -32,12 +32,21 @@ javascript:fetch("https://raw.githubusercontent.com/hugu641/ConsChromeGame/main/
 
 ## 🎰 Casino (jetons virtuels)
 
-Une tuile **Casino** apparaît dans le hub : machine à sous, pile ou face, roulette, bonus quotidien et classement. Les jetons n'ont aucune valeur réelle.
+Une tuile **Casino** apparaît dans le hub :
+- 🃏 **Blackjack** : Distribution, Tirer (Hit), Rester (Stand), Doubler (Double Down), Blackjack naturel (3:2), croupier automatique.
+- 🎡 **Roulette européenne** : Table interactive avec numéros pleins (×36), douzaines (×3), colonnes (×3), couleurs (×2), parités (×2) et moitiés (×2) avec historique des tirages.
+- 💣 **Mines** : Grille 5×5 personnalisable (1 à 24 mines), multiplicateurs croissants et encaissement libre (Cash Out) à tout moment.
+- 🎰 **Machine à sous** : 3 rouleaux avec multiplicateurs jusqu'à ×40.
+- 🪙 **Pile ou face** : Tirage instantané (×1,95).
+- 🎁 **Bonus du jour** (+500 🪙 toutes les 24h) et 🏆 **Classement Top 10** des plus riches.
 
-**Anti-triche** : le script tourne dans le navigateur du joueur, donc rien de ce qu'il contient n'est digne de confiance. Toute la logique est dans un petit serveur (`worker/`, Cloudflare Workers + base D1) :
+Les jetons n'ont aucune valeur réelle.
+
+**Anti-triche** : le script tourne dans le navigateur du joueur, donc rien de ce qu'il contient n'est digne de confiance. Toute la logique est dans un serveur (`worker/`, Cloudflare Workers + base D1) :
 - les comptes et les mots de passe (hachés PBKDF2 + sel) sont côté serveur ;
-- les tirages sont faits par le serveur (`crypto.getRandomValues`), le client n'envoie que sa mise et son choix ;
-- chaque partie est un seul `UPDATE` SQL atomique : impossible de dépenser deux fois le même solde en envoyant des requêtes en parallèle ;
+- les tirages, les paquets de cartes et les mines sont générés côté serveur (`crypto.getRandomValues`) ;
+- chaque mise et gain est validé via des transactions SQL atomiques : impossible de dupliquer ou falsifier les soldes ;
+- persistance des parties en cours (reprise automatique après reconnexion ou rafraîchissement) ;
 - sessions par token aléatoire, verrouillage après 5 mots de passe faux, 5 inscriptions max par IP et par heure.
 
 GitHub ne peut pas servir de base de données sécurisée depuis le navigateur (il faudrait publier un token d'écriture dans le code), c'est pourquoi la base est sur Cloudflare. Tout passe en HTTPS (port 443).

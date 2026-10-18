@@ -24,3 +24,22 @@ CREATE TABLE IF NOT EXISTS reg_ip (
   ts INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_reg_ip ON reg_ip (ip, ts);
+
+CREATE TABLE IF NOT EXISTS blackjack_games (
+  user_id      INTEGER PRIMARY KEY,
+  bet          INTEGER NOT NULL,
+  player_cards TEXT    NOT NULL,
+  dealer_cards TEXT    NOT NULL,
+  deck         TEXT    NOT NULL,
+  status       TEXT    NOT NULL,
+  updated      INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS mines_games (
+  user_id      INTEGER PRIMARY KEY,
+  bet          INTEGER NOT NULL,
+  mines_count  INTEGER NOT NULL,
+  mine_indices TEXT    NOT NULL,
+  revealed     TEXT    NOT NULL,
+  updated      INTEGER NOT NULL
+);
