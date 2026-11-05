@@ -10,6 +10,9 @@ const PBKDF2_ITER = 100000;
 const MAX_REG_PER_IP_HOUR = 5;
 const MAX_FAILS = 5;
 const LOCK_MS = 60 * 1000;
+const ACCOUNT_MAX_FAILS = 30; // verrou global du compte (toutes IP confondues)
+const ACCOUNT_LOCK_MS = 5 * 60 * 1000;
+const GAME_TTL_MS = 24 * 3600 * 1000; // une partie abandonnée depuis plus de 24 h est perdue
 
 const CORS = {
   "access-control-allow-origin": "*",
@@ -91,6 +94,13 @@ async function ensureTables(db) {
         mine_indices TEXT NOT NULL,
         revealed TEXT NOT NULL,
         updated INTEGER NOT NULL
+      )`),
+      db.prepare(`CREATE TABLE IF NOT EXISTS login_fails (
+        ip TEXT NOT NULL,
+        name_lower TEXT NOT NULL,
+        fails INTEGER NOT NULL DEFAULT 0,
+        lock_until INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (ip, name_lower)
       )`),
     ]);
     tablesInit = true;
@@ -193,6 +203,35 @@ function handValue(cards) {
 
 const isNaturalBJ = (cards) => cards.length === 2 && handValue(cards) === 21;
 
+// Règle une partie de façon atomique : verse le gain ET supprime la partie dans un seul batch.
+// Si la partie n'existe plus (requête concurrente déjà traitée), rien n'est versé -> pas de double paiement.
+async function settle(db, table, userId, payout, status = null, extra = "", binds = []) {
+  const cond = `user_id = ?${status ? " AND status = ?" : ""}${extra}`;
+  const cb = [userId, ...(status ? [status] : []), ...binds];
+  const [upd] = await db.batch([
+    db.prepare(
+      `UPDATE users SET balance = balance + ? WHERE id = ? AND EXISTS (SELECT 1 FROM ${table} WHERE ${cond}) RETURNING balance`
+    ).bind(payout, userId, ...cb),
+    db.prepare(`DELETE FROM ${table} WHERE ${cond}`).bind(...cb),
+  ]);
+  const row = upd.results && upd.results[0];
+  if (!row) throw new HttpError(409, "Partie déjà terminée");
+  return row.balance;
+}
+
+// Supprime une partie perdue (sans paiement). Échoue si une requête concurrente l'a déjà réglée.
+async function forfeit(db, table, userId, status = null) {
+  const row = await db.prepare(
+    `DELETE FROM ${table} WHERE user_id = ?${status ? " AND status = ?" : ""} RETURNING user_id`
+  ).bind(userId, ...(status ? [status] : [])).first();
+  if (!row) throw new HttpError(409, "Partie déjà terminée");
+  const cur = await db.prepare("SELECT balance FROM users WHERE id = ?").bind(userId).first();
+  return cur.balance;
+}
+
+const purgeStale = (db, table, userId) =>
+  db.prepare(`DELETE FROM ${table} WHERE user_id = ? AND updated < ?`).bind(userId, Date.now() - GAME_TTL_MS).run();
+
 async function getBjGame(db, userId) {
   const row = await db.prepare("SELECT * FROM blackjack_games WHERE user_id = ?").bind(userId).first();
   if (!row) return null;
@@ -205,6 +244,7 @@ async function getBjGame(db, userId) {
 }
 
 async function bjState(db, user) {
+  await purgeStale(db, "blackjack_games", user.id);
   const g = await getBjGame(db, user.id);
   if (!g) return json({ active: false });
   return json({
@@ -212,7 +252,7 @@ async function bjState(db, user) {
     bet: g.bet,
     player: { cards: g.playerCards, score: handValue(g.playerCards) },
     dealer: { cards: [g.dealerCards[0], "?"], score: handValue([g.dealerCards[0]]) },
-    canDouble: g.playerCards.length === 2 && user.balance >= g.bet,
+    canDouble: g.status === "playing" && g.playerCards.length === 2 && user.balance >= g.bet,
     status: g.status,
   });
 }
@@ -221,38 +261,27 @@ async function bjDeal(req, db, user) {
   const { bet } = await readBody(req);
   if (!Number.isInteger(bet) || bet < 1 || bet > MAX_BET) throw new HttpError(400, `Mise entre 1 et ${MAX_BET}`);
 
-  const existing = await getBjGame(db, user.id);
-  if (existing) throw new HttpError(400, "Une partie de Blackjack est déjà en cours. Termine-la d'abord !");
-
-  const userRow = await db.prepare(
-    "UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ? RETURNING balance"
-  ).bind(bet, user.id, bet).first();
-  if (!userRow) throw new HttpError(400, "Solde insuffisant");
+  await purgeStale(db, "blackjack_games", user.id);
+  if (await getBjGame(db, user.id)) throw new HttpError(400, "Une partie de Blackjack est déjà en cours. Termine-la d'abord !");
 
   const deck = createDeck();
   const playerCards = [deck.pop(), deck.pop()];
   const dealerCards = [deck.pop(), deck.pop()];
-
   const pScore = handValue(playerCards);
   const pBJ = isNaturalBJ(playerCards);
   const dBJ = isNaturalBJ(dealerCards);
 
-  if (pBJ) {
-    let payout = 0;
-    let status = "blackjack";
-    let delta = 0;
-    if (dBJ) {
-      status = "push";
-      payout = bet;
-      delta = 0;
-    } else {
-      payout = bet + Math.floor(bet * 1.5);
-      delta = Math.floor(bet * 1.5);
-    }
-    const endRow = await db.prepare(
-      "UPDATE users SET balance = balance + ? WHERE id = ? RETURNING balance"
-    ).bind(payout, user.id).first();
+  // Partie réglée immédiatement : un seul UPDATE atomique (mise + gain)
+  if (pBJ || dBJ) {
+    let status, payout, delta;
+    if (pBJ && dBJ) { status = "push"; payout = bet; delta = 0; }
+    else if (pBJ) { status = "blackjack"; delta = Math.floor(bet * 1.5); payout = bet + delta; }
+    else { status = "dealer_blackjack"; payout = 0; delta = -bet; }
 
+    const row = await db.prepare(
+      "UPDATE users SET balance = balance + ? WHERE id = ? AND balance >= ? RETURNING balance"
+    ).bind(delta, user.id, bet).first();
+    if (!row) throw new HttpError(400, "Solde insuffisant");
     return json({
       active: false,
       bet,
@@ -261,27 +290,26 @@ async function bjDeal(req, db, user) {
       status,
       payout,
       delta,
-      balance: endRow.balance,
+      balance: row.balance,
     });
   }
 
-  if (dBJ) {
-    return json({
-      active: false,
-      bet,
-      player: { cards: playerCards, score: pScore },
-      dealer: { cards: dealerCards, score: 21 },
-      status: "dealer_blackjack",
-      payout: 0,
-      delta: -bet,
-      balance: userRow.balance,
-    });
+  // On crée d'abord la partie (la clé primaire empêche deux parties simultanées), puis on débite la mise.
+  try {
+    await db.prepare(
+      "INSERT INTO blackjack_games (user_id, bet, player_cards, dealer_cards, deck, status, updated) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).bind(user.id, bet, JSON.stringify(playerCards), JSON.stringify(dealerCards), JSON.stringify(deck), "playing", Date.now()).run();
+  } catch (e) {
+    if (String(e.message || e).includes("UNIQUE")) throw new HttpError(400, "Une partie de Blackjack est déjà en cours");
+    throw e;
   }
-
-  const now = Date.now();
-  await db.prepare(
-    "INSERT INTO blackjack_games (user_id, bet, player_cards, dealer_cards, deck, status, updated) VALUES (?, ?, ?, ?, ?, ?, ?)"
-  ).bind(user.id, bet, JSON.stringify(playerCards), JSON.stringify(dealerCards), JSON.stringify(deck), "playing", now).run();
+  const userRow = await db.prepare(
+    "UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ? RETURNING balance"
+  ).bind(bet, user.id, bet).first();
+  if (!userRow) {
+    await db.prepare("DELETE FROM blackjack_games WHERE user_id = ?").bind(user.id).run();
+    throw new HttpError(400, "Solde insuffisant");
+  }
 
   return json({
     active: true,
@@ -294,7 +322,8 @@ async function bjDeal(req, db, user) {
   });
 }
 
-async function resolveDealer(db, user, g) {
+// `expected` : statut que la partie doit avoir en base ("playing", ou "doubling" après un doublement)
+async function resolveDealer(db, user, g, expected = "playing") {
   let dScore = handValue(g.dealerCards);
   while (dScore < 17) {
     g.dealerCards.push(g.deck.pop());
@@ -302,40 +331,13 @@ async function resolveDealer(db, user, g) {
   }
 
   const pScore = handValue(g.playerCards);
-  let status = "lose";
-  let payout = 0;
-  let delta = -g.bet;
+  let status, payout, delta;
+  if (dScore > 21) { status = "dealer_bust"; payout = g.bet * 2; delta = g.bet; }
+  else if (pScore > dScore) { status = "win"; payout = g.bet * 2; delta = g.bet; }
+  else if (pScore === dScore) { status = "push"; payout = g.bet; delta = 0; }
+  else { status = "lose"; payout = 0; delta = -g.bet; }
 
-  if (dScore > 21) {
-    status = "dealer_bust";
-    payout = g.bet * 2;
-    delta = g.bet;
-  } else if (pScore > dScore) {
-    status = "win";
-    payout = g.bet * 2;
-    delta = g.bet;
-  } else if (pScore === dScore) {
-    status = "push";
-    payout = g.bet;
-    delta = 0;
-  } else {
-    status = "lose";
-    payout = 0;
-    delta = -g.bet;
-  }
-
-  await db.prepare("DELETE FROM blackjack_games WHERE user_id = ?").bind(user.id).run();
-
-  let finalBal = user.balance;
-  if (payout > 0) {
-    const endRow = await db.prepare(
-      "UPDATE users SET balance = balance + ? WHERE id = ? RETURNING balance"
-    ).bind(payout, user.id).first();
-    finalBal = endRow.balance;
-  } else {
-    const curUser = await db.prepare("SELECT balance FROM users WHERE id = ?").bind(user.id).first();
-    finalBal = curUser.balance;
-  }
+  const finalBal = await settle(db, "blackjack_games", user.id, payout, expected);
 
   return json({
     active: false,
@@ -351,15 +353,13 @@ async function resolveDealer(db, user, g) {
 
 async function bjHit(db, user) {
   const g = await getBjGame(db, user.id);
-  if (!g) throw new HttpError(400, "Aucune partie en cours");
+  if (!g || g.status !== "playing") throw new HttpError(400, "Aucune partie en cours");
 
-  const newCard = g.deck.pop();
-  g.playerCards.push(newCard);
+  g.playerCards.push(g.deck.pop());
   const pScore = handValue(g.playerCards);
 
   if (pScore > 21) {
-    await db.prepare("DELETE FROM blackjack_games WHERE user_id = ?").bind(user.id).run();
-    const curUser = await db.prepare("SELECT balance FROM users WHERE id = ?").bind(user.id).first();
+    const balance = await forfeit(db, "blackjack_games", user.id, "playing");
     return json({
       active: false,
       bet: g.bet,
@@ -368,17 +368,16 @@ async function bjHit(db, user) {
       status: "bust",
       payout: 0,
       delta: -g.bet,
-      balance: curUser.balance,
+      balance,
     });
   }
 
-  if (pScore === 21) {
-    return await resolveDealer(db, user, g);
-  }
+  if (pScore === 21) return await resolveDealer(db, user, g);
 
-  await db.prepare(
-    "UPDATE blackjack_games SET player_cards = ?, deck = ?, updated = ? WHERE user_id = ?"
-  ).bind(JSON.stringify(g.playerCards), JSON.stringify(g.deck), Date.now(), user.id).run();
+  const upd = await db.prepare(
+    "UPDATE blackjack_games SET player_cards = ?, deck = ?, updated = ? WHERE user_id = ? AND status = 'playing' RETURNING user_id"
+  ).bind(JSON.stringify(g.playerCards), JSON.stringify(g.deck), Date.now(), user.id).first();
+  if (!upd) throw new HttpError(409, "Partie déjà terminée");
 
   const curUser = await db.prepare("SELECT balance FROM users WHERE id = ?").bind(user.id).first();
   return json({
@@ -394,27 +393,40 @@ async function bjHit(db, user) {
 
 async function bjStand(db, user) {
   const g = await getBjGame(db, user.id);
-  if (!g) throw new HttpError(400, "Aucune partie en cours");
+  if (!g || g.status !== "playing") throw new HttpError(400, "Aucune partie en cours");
   return await resolveDealer(db, user, g);
 }
 
 async function bjDouble(db, user) {
+  // Verrou exclusif : une seule requête peut faire passer la partie de "playing" à "doubling"
+  const claim = await db.prepare(
+    "UPDATE blackjack_games SET status = 'doubling', updated = ? WHERE user_id = ? AND status = 'playing' RETURNING user_id"
+  ).bind(Date.now(), user.id).first();
+  if (!claim) throw new HttpError(400, "Aucune partie en cours");
+
+  const revert = () =>
+    db.prepare("UPDATE blackjack_games SET status = 'playing' WHERE user_id = ? AND status = 'doubling'").bind(user.id).run();
+
   const g = await getBjGame(db, user.id);
-  if (!g) throw new HttpError(400, "Aucune partie en cours");
-  if (g.playerCards.length !== 2) throw new HttpError(400, "Doubler n'est permis qu'au premier tour");
+  if (g.playerCards.length !== 2) {
+    await revert();
+    throw new HttpError(400, "Doubler n'est permis qu'au premier tour");
+  }
 
   const userRow = await db.prepare(
     "UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ? RETURNING balance"
   ).bind(g.bet, user.id, g.bet).first();
-  if (!userRow) throw new HttpError(400, "Solde insuffisant pour doubler");
+  if (!userRow) {
+    await revert();
+    throw new HttpError(400, "Solde insuffisant pour doubler");
+  }
 
   g.bet = g.bet * 2;
-  const newCard = g.deck.pop();
-  g.playerCards.push(newCard);
+  g.playerCards.push(g.deck.pop());
   const pScore = handValue(g.playerCards);
 
   if (pScore > 21) {
-    await db.prepare("DELETE FROM blackjack_games WHERE user_id = ?").bind(user.id).run();
+    const balance = await settle(db, "blackjack_games", user.id, 0, "doubling");
     return json({
       active: false,
       bet: g.bet,
@@ -423,11 +435,11 @@ async function bjDouble(db, user) {
       status: "bust",
       payout: 0,
       delta: -g.bet,
-      balance: userRow.balance,
+      balance,
     });
   }
 
-  return await resolveDealer(db, user, g);
+  return await resolveDealer(db, user, g, "doubling");
 }
 
 // ---------- Mines Logic ----------
@@ -454,11 +466,13 @@ async function getMinesGame(db, userId) {
   return {
     ...row,
     mineIndices: JSON.parse(row.mine_indices),
+    revealedRaw: row.revealed, // texte exact en base, utilisé pour les mises à jour conditionnelles
     revealed: JSON.parse(row.revealed),
   };
 }
 
 async function minesState(db, user) {
+  await purgeStale(db, "mines_games", user.id);
   const g = await getMinesGame(db, user.id);
   if (!g) return json({ active: false });
   const mult = getMinesMultiplier(g.mines_count, g.revealed.length);
@@ -480,13 +494,8 @@ async function minesStart(req, db, user) {
   const mCount = Math.floor(Number(minesCount));
   if (!Number.isInteger(mCount) || mCount < 1 || mCount > 24) throw new HttpError(400, "Nombre de mines entre 1 et 24");
 
-  const existing = await getMinesGame(db, user.id);
-  if (existing) throw new HttpError(400, "Une partie de Mines est déjà en cours");
-
-  const userRow = await db.prepare(
-    "UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ? RETURNING balance"
-  ).bind(bet, user.id, bet).first();
-  if (!userRow) throw new HttpError(400, "Solde insuffisant");
+  await purgeStale(db, "mines_games", user.id);
+  if (await getMinesGame(db, user.id)) throw new HttpError(400, "Une partie de Mines est déjà en cours");
 
   const allPos = Array.from({ length: 25 }, (_, i) => i);
   for (let i = allPos.length - 1; i > 0; i--) {
@@ -495,9 +504,22 @@ async function minesStart(req, db, user) {
   }
   const mines = allPos.slice(0, mCount);
 
-  await db.prepare(
-    "INSERT INTO mines_games (user_id, bet, mines_count, mine_indices, revealed, updated) VALUES (?, ?, ?, ?, ?, ?)"
-  ).bind(user.id, bet, mCount, JSON.stringify(mines), "[]", Date.now()).run();
+  // Création de la partie d'abord (clé primaire = une seule partie), puis débit de la mise
+  try {
+    await db.prepare(
+      "INSERT INTO mines_games (user_id, bet, mines_count, mine_indices, revealed, updated) VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind(user.id, bet, mCount, JSON.stringify(mines), "[]", Date.now()).run();
+  } catch (e) {
+    if (String(e.message || e).includes("UNIQUE")) throw new HttpError(400, "Une partie de Mines est déjà en cours");
+    throw e;
+  }
+  const userRow = await db.prepare(
+    "UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ? RETURNING balance"
+  ).bind(bet, user.id, bet).first();
+  if (!userRow) {
+    await db.prepare("DELETE FROM mines_games WHERE user_id = ?").bind(user.id).run();
+    throw new HttpError(400, "Solde insuffisant");
+  }
 
   return json({
     active: true,
@@ -521,9 +543,7 @@ async function minesReveal(req, db, user) {
   if (g.revealed.includes(idx)) throw new HttpError(400, "Case déjà révélée");
 
   if (g.mineIndices.includes(idx)) {
-    // Bombe touchée
-    await db.prepare("DELETE FROM mines_games WHERE user_id = ?").bind(user.id).run();
-    const curUser = await db.prepare("SELECT balance FROM users WHERE id = ?").bind(user.id).first();
+    const balance = await forfeit(db, "mines_games", user.id);
     return json({
       bomb: true,
       hitIndex: idx,
@@ -531,7 +551,7 @@ async function minesReveal(req, db, user) {
       revealed: g.revealed,
       delta: -g.bet,
       payout: 0,
-      balance: curUser.balance,
+      balance,
     });
   }
 
@@ -541,10 +561,7 @@ async function minesReveal(req, db, user) {
 
   if (safeLeft === 0) {
     const payout = Math.floor(g.bet * mult);
-    await db.prepare("DELETE FROM mines_games WHERE user_id = ?").bind(user.id).run();
-    const endRow = await db.prepare(
-      "UPDATE users SET balance = balance + ? WHERE id = ? RETURNING balance"
-    ).bind(payout, user.id).first();
+    const balance = await settle(db, "mines_games", user.id, payout, null, " AND revealed = ?", [g.revealedRaw]);
     return json({
       bomb: false,
       allCleared: true,
@@ -553,13 +570,15 @@ async function minesReveal(req, db, user) {
       mult,
       payout,
       delta: payout - g.bet,
-      balance: endRow.balance,
+      balance,
     });
   }
 
-  await db.prepare(
-    "UPDATE mines_games SET revealed = ?, updated = ? WHERE user_id = ?"
-  ).bind(JSON.stringify(g.revealed), Date.now(), user.id).run();
+  // Mise à jour conditionnelle : échoue si une autre requête a modifié la partie entre-temps
+  const upd = await db.prepare(
+    "UPDATE mines_games SET revealed = ?, updated = ? WHERE user_id = ? AND revealed = ? RETURNING user_id"
+  ).bind(JSON.stringify(g.revealed), Date.now(), user.id, g.revealedRaw).first();
+  if (!upd) throw new HttpError(409, "Action simultanée détectée, réessaie");
 
   const curUser = await db.prepare("SELECT balance FROM users WHERE id = ?").bind(user.id).first();
   return json({
@@ -579,18 +598,15 @@ async function minesCashout(db, user) {
 
   const mult = getMinesMultiplier(g.mines_count, g.revealed.length);
   const payout = Math.floor(g.bet * mult);
-
-  await db.prepare("DELETE FROM mines_games WHERE user_id = ?").bind(user.id).run();
-  const endRow = await db.prepare(
-    "UPDATE users SET balance = balance + ? WHERE id = ? RETURNING balance"
-  ).bind(payout, user.id).first();
+  const balance = await settle(db, "mines_games", user.id, payout, null, " AND revealed = ?", [g.revealedRaw]);
 
   return json({
     payout,
     delta: payout - g.bet,
     mult,
     mines: g.mineIndices,
-    balance: endRow.balance,
+    revealed: g.revealed,
+    balance,
   });
 }
 
@@ -657,21 +673,36 @@ async function register(req, db) {
 
 async function login(req, db) {
   const { name, password } = await readBody(req);
-  if (typeof name !== "string" || typeof password !== "string" || password.length > 100) throw new HttpError(400, "Requête invalide");
-  const u = await db.prepare("SELECT * FROM users WHERE name_lower = ?").bind(name.toLowerCase()).first();
+  if (typeof name !== "string" || typeof password !== "string" || name.length > 32 || password.length > 100) throw new HttpError(400, "Requête invalide");
+  const nameLower = name.toLowerCase();
+  const ip = req.headers.get("cf-connecting-ip") || "unknown";
+  const u = await db.prepare("SELECT * FROM users WHERE name_lower = ?").bind(nameLower).first();
   const now = Date.now();
-  if (u && u.lock_until > now) throw new HttpError(429, "Trop d'essais infructueux, attends un peu", { wait: u.lock_until - now });
-  
+
+  // Verrou par (IP + pseudo) : un tiers ne peut pas bloquer le compte d'un autre depuis son IP
+  const f = u ? await db.prepare("SELECT fails, lock_until FROM login_fails WHERE ip = ? AND name_lower = ?").bind(ip, nameLower).first() : null;
+  if (f && f.lock_until > now) throw new HttpError(429, "Trop d'essais infructueux, attends un peu", { wait: f.lock_until - now });
+  if (u && u.lock_until > now) throw new HttpError(429, "Compte temporairement verrouillé, réessaie plus tard", { wait: u.lock_until - now });
+
   const hash = await hashPassword(password, u ? u.salt : "00".repeat(16));
   if (!u || !safeEqual(hash, u.hash)) {
     if (u) {
-      const lock = u.fails + 1 >= MAX_FAILS;
+      await db.prepare(
+        `INSERT INTO login_fails (ip, name_lower, fails, lock_until) VALUES (?, ?, 1, 0)
+         ON CONFLICT(ip, name_lower) DO UPDATE SET
+           fails = CASE WHEN fails + 1 >= ? THEN 0 ELSE fails + 1 END,
+           lock_until = CASE WHEN fails + 1 >= ? THEN ? ELSE 0 END`
+      ).bind(ip, nameLower, MAX_FAILS, MAX_FAILS, now + LOCK_MS).run();
+      const lock = u.fails + 1 >= ACCOUNT_MAX_FAILS;
       await db.prepare("UPDATE users SET fails = ?, lock_until = ? WHERE id = ?")
-        .bind(lock ? 0 : u.fails + 1, lock ? now + LOCK_MS : 0, u.id).run();
+        .bind(lock ? 0 : u.fails + 1, lock ? now + ACCOUNT_LOCK_MS : 0, u.id).run();
     }
     throw new HttpError(401, "Pseudo ou mot de passe incorrect");
   }
-  await db.prepare("UPDATE users SET fails = 0, lock_until = 0 WHERE id = ?").bind(u.id).run();
+  await db.batch([
+    db.prepare("UPDATE users SET fails = 0, lock_until = 0 WHERE id = ?").bind(u.id),
+    db.prepare("DELETE FROM login_fails WHERE ip = ? AND name_lower = ?").bind(ip, nameLower),
+  ]);
   return json({ token: await createSession(db, u.id), user: publicUser(u) });
 }
 
@@ -709,6 +740,7 @@ export default {
     const db = env.DB;
 
     try {
+      await ensureTables(db);
       if (req.method === "GET" && pathname === "/api/leaderboard") {
         const { results } = await db.prepare("SELECT name, balance FROM users ORDER BY balance DESC LIMIT 10").all();
         return json({ top: results });
@@ -738,7 +770,6 @@ export default {
 
         // Blackjack
         if (pathname.startsWith("/api/blackjack/")) {
-          await ensureTables(db);
           if (req.method === "GET" && pathname === "/api/blackjack/state") return await bjState(db, row);
           if (req.method === "POST" && pathname === "/api/blackjack/deal") return await bjDeal(req, db, row);
           if (req.method === "POST" && pathname === "/api/blackjack/hit") return await bjHit(db, row);
@@ -748,7 +779,6 @@ export default {
 
         // Mines
         if (pathname.startsWith("/api/mines/")) {
-          await ensureTables(db);
           if (req.method === "GET" && pathname === "/api/mines/state") return await minesState(db, row);
           if (req.method === "POST" && pathname === "/api/mines/start") return await minesStart(req, db, row);
           if (req.method === "POST" && pathname === "/api/mines/reveal") return await minesReveal(req, db, row);

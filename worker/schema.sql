@@ -43,3 +43,11 @@ CREATE TABLE IF NOT EXISTS mines_games (
   revealed     TEXT    NOT NULL,
   updated      INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS login_fails (
+  ip         TEXT    NOT NULL,
+  name_lower TEXT    NOT NULL,
+  fails      INTEGER NOT NULL DEFAULT 0,
+  lock_until INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (ip, name_lower)
+);

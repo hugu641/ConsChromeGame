@@ -40,6 +40,8 @@
       else if (k === "text") el.textContent = v;
       else if (k === "style") el.style.cssText = v;
       else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else if (v === false || v == null) continue; // attribut booléen désactivé (évite disabled="false")
+      else if (v === true) el.setAttribute(k, "");
       else el.setAttribute(k, v);
     }
     kids.flat().forEach((c) => c != null && c !== false && el.append(c));
@@ -102,7 +104,7 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
 @keyframes fade{from{opacity:0}to{opacity:1}}
 
 .win{--bg:rgba(15,17,26,.94);--line:rgba(255,255,255,.08);--txt:#eef0f8;--mut:#8b90a8;--a1:#7c5cff;--a2:#00d4ff;
-  position:fixed;top:70px;left:70px;width:700px;height:520px;min-width:380px;min-height:300px;max-width:100vw;max-height:100vh;
+  position:fixed;top:70px;left:70px;width:700px;height:520px;min-width:min(380px,100vw);min-height:300px;max-width:100vw;max-height:100vh;
   display:flex;flex-direction:column;color:var(--txt);font-size:13px;
   background:var(--bg);backdrop-filter:blur(26px) saturate(170%);-webkit-backdrop-filter:blur(26px) saturate(170%);
   border:1px solid var(--line);border-radius:18px;
@@ -336,9 +338,8 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
       "camera *", "microphone *", "geolocation *", "fullscreen *", "autoplay *",
       "clipboard-read *", "clipboard-write *", "display-capture *",
       "encrypted-media *", "picture-in-picture *", "screen-wake-lock *",
-      "gamepad *", "keyboard-map *", "midi *", "accelerometer *", "gyroscope *",
-      "magnetometer *", "xr-spatial-tracking *", "web-share *", "speaker-selection *",
-      "hid *", "serial *", "usb *", "bluetooth *", "idle-detection *",
+      "gamepad *", "midi *", "accelerometer *", "gyroscope *",
+      "magnetometer *", "xr-spatial-tracking *", "web-share *",
       "payment *", "publickey-credentials-get *", "storage-access *",
     ].join("; ")
   );

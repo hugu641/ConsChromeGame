@@ -280,7 +280,7 @@ function appView() {
 
     return h("div", { style: "display:flex;flex-direction:column;gap:6px;align-items:center;width:100%" },
       h("div", { class: "cz-bet" },
-        h("button", { text: "Min", onclick: () => sync(10) }),
+        h("button", { text: "Min", onclick: () => sync(1) }),
         h("button", { text: "½", onclick: () => sync(bet / 2) }),
         inp,
         h("button", { text: "×2", onclick: () => sync(bet * 2) }),
@@ -703,8 +703,8 @@ function appView() {
         const cashBtn = h("button", {
           class: "cz-btn green",
           text: `💰 Encaisser ${fmt(activeGame.cashout)} 🪙`,
-          disabled: activeGame.revealed.length === 0,
         });
+        cashBtn.disabled = activeGame.revealed.length === 0;
 
         cashBtn.onclick = async () => {
           if (busy) return;
