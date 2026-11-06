@@ -32,7 +32,7 @@ const CSS = `
 .cz-btn.gold{background:linear-gradient(135deg,#ffc83d,#ff8a3d);color:#2a1a00;box-shadow:0 6px 18px rgba(255,170,60,.35)}
 .cz-btn.green{background:linear-gradient(135deg,#20bf6b,#0fb9b1);color:#fff;box-shadow:0 6px 18px rgba(32,191,107,.35)}
 .cz-btn.red{background:linear-gradient(135deg,#eb3b5a,#fa8231);color:#fff;box-shadow:0 6px 18px rgba(235,59,90,.35)}
-.cz-btn.ghost{background:rgba(255,255,255,.07);box-shadow:none}
+.cz-btn.soft{background:rgba(255,255,255,.07);box-shadow:none}
 
 .cz-auth{max-width:320px;margin:28px auto 0;display:flex;flex-direction:column;gap:10px;text-align:center}
 .cz-logo{font-size:44px}
@@ -60,7 +60,7 @@ const CSS = `
 .cz-quick-chips button:hover{background:rgba(124,92,255,.25);color:#fff}
 
 .cz-res{min-height:22px;font-weight:700;font-size:14px;text-align:center}
-.cz-res.win{color:var(--ok)}.cz-res.lose{color:var(--bad)}.cz-res.gold{color:var(--gold)}
+.cz-res.rwin{color:var(--ok)}.cz-res.rlose{color:var(--bad)}.cz-res.gold{color:var(--gold)}
 
 /* --- Cartes & Blackjack --- */
 .cz-bj-felt{width:100%;background:radial-gradient(ellipse at center,#164e3b 0%,#0c2a20 100%);border:2px solid rgba(32,191,107,.25);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:14px;box-shadow:inset 0 0 24px rgba(0,0,0,.6)}
@@ -235,7 +235,7 @@ function appView() {
     }
   };
 
-  const out = h("button", { class: "cz-btn ghost", text: "Déconnexion" });
+  const out = h("button", { class: "cz-btn soft", text: "Déconnexion" });
   out.onclick = async () => {
     try { await api("/api/logout", {}); } catch {}
     saveToken(null);
@@ -291,7 +291,7 @@ function appView() {
   };
 
   const verdict = (el, d) => {
-    el.className = "cz-res " + (d.delta > 0 ? "win" : d.delta === 0 ? "gold" : "lose");
+    el.className = "cz-res " + (d.delta > 0 ? "rwin" : d.delta === 0 ? "gold" : "rlose");
     el.textContent = d.delta > 0 ? `Gagné ! +${fmt(d.delta)} 🪙` : d.delta === 0 ? "Égalité · Mise récupérée" : `Perdu −${fmt(-d.delta)} 🪙`;
   };
 
@@ -406,25 +406,25 @@ function appView() {
 
     const handleEnd = (d) => {
       if (d.status === "blackjack") {
-        res.className = "cz-res win";
+        res.className = "cz-res rwin";
         res.textContent = `🎉 BLACKJACK ! +${fmt(d.delta)} 🪙`;
       } else if (d.status === "bust") {
-        res.className = "cz-res lose";
+        res.className = "cz-res rlose";
         res.textContent = `💥 BUST ! Dépassé 21 (−${fmt(d.bet)} 🪙)`;
       } else if (d.status === "dealer_bust") {
-        res.className = "cz-res win";
+        res.className = "cz-res rwin";
         res.textContent = `🎉 Le croupier dépasse 21 ! +${fmt(d.delta)} 🪙`;
       } else if (d.status === "win") {
-        res.className = "cz-res win";
+        res.className = "cz-res rwin";
         res.textContent = `✨ Gagné ! +${fmt(d.delta)} 🪙`;
       } else if (d.status === "push") {
         res.className = "cz-res gold";
         res.textContent = `🤝 Égalité · Mise récupérée`;
       } else if (d.status === "dealer_blackjack") {
-        res.className = "cz-res lose";
+        res.className = "cz-res rlose";
         res.textContent = `💀 Blackjack du croupier (−${fmt(d.bet)} 🪙)`;
       } else {
-        res.className = "cz-res lose";
+        res.className = "cz-res rlose";
         res.textContent = `❌ Perdu contre le croupier (−${fmt(d.bet)} 🪙)`;
       }
     };
@@ -645,13 +645,13 @@ function appView() {
         if (d.bomb) {
           currentGame = null;
           renderGrid(null, d);
-          res.className = "cz-res lose";
+          res.className = "cz-res rlose";
           res.textContent = `💥 BOOM ! Mine touchée (−${fmt(d.delta ? -d.delta : bet)} 🪙)`;
           updateControls(null);
         } else if (d.allCleared) {
           currentGame = null;
           renderGrid(null, d);
-          res.className = "cz-res win";
+          res.className = "cz-res rwin";
           res.textContent = `🎉 INCROYABLE ! Tous les diamants découverts ! +${fmt(d.delta)} 🪙`;
           updateControls(null);
         } else {
@@ -714,7 +714,7 @@ function appView() {
             setBal(d.balance);
             currentGame = null;
             renderGrid(null, d);
-            res.className = "cz-res win";
+            res.className = "cz-res rwin";
             res.textContent = `🎉 Encaissé avec succès ! +${fmt(d.delta)} 🪙 (x${d.mult.toFixed(2)})`;
             updateControls(null);
           } catch (e) { toast(e.message); }
