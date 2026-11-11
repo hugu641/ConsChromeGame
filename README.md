@@ -5,8 +5,11 @@ A floating window you launch from your browser console that displays another web
 ## Features
 
 - 🪟 Draggable and resizable floating window
-- 🔘 Ready-made site buttons (FrAnime, BrainworxEdu, KartBros, BikeBros)
-- ➕ Add your own links manually, saved in your browser
+- 📁 **Organisation par dossiers / fichiers thématiques** (Call of Duty & Zombies, FPS & Rétro, GTA & Open World, Course, Glisse & Sport, Multijoueur...)
+- 🔍 **Barre de recherche instantanée** avec filtrage en temps réel et raccourci clavier (`/`)
+- 🔘 Ready-made site buttons & hub organisé
+- ➕ Add your own links manually with custom folder selection, saved in your browser
+- ✏️ Edit, rename and organize favorites into folders
 - ⛶ Maximize / restore button
 - — Minimize to a small floating bubble
 - ✕ Close button

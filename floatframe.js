@@ -65,6 +65,9 @@
     arrow: "M5 12h14M13 6l6 6-6 6",
     reset: "M3 12a9 9 0 1 0 3-6.7M3 4v5h5",
     shield: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
+    search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35",
+    folder: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z",
+    edit: "M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z",
   };
   const NS = "http://www.w3.org/2000/svg";
   const ico = (d, size = 16) => {
@@ -82,7 +85,13 @@
   const readStorage = () => {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (Array.isArray(saved)) return saved;
+      if (Array.isArray(saved)) {
+        return saved.map((s) => ({
+          name: s.name || "Site",
+          url: s.url || "",
+          folder: s.folder || s.category || "Favoris",
+        }));
+      }
     } catch {}
     return [];
   };
@@ -176,13 +185,42 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
 .hub.off{display:none}
 .casino{display:none;flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
 .casino.on{display:block}
-.hub-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:16px}
+.hub-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
 .hub-head h2{margin:0;font-size:22px;font-weight:750;letter-spacing:-.3px;
   background:linear-gradient(90deg,#fff,#b9a8ff);-webkit-background-clip:text;background-clip:text;color:transparent}
 .hub-head p{margin:4px 0 0;color:var(--mut);font-size:12px}
 .ghost{display:flex;align-items:center;gap:6px;padding:7px 11px;border-radius:10px;font-size:12px;color:var(--mut);
   border:1px solid var(--line);background:rgba(255,255,255,.04);transition:.15s;flex-shrink:0}
 .ghost:hover{color:#fff;background:rgba(255,255,255,.1)}
+
+/* Hub search & folder organization */
+.hub-toolbar{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}
+.hub-search-box{display:flex;align-items:center;gap:10px;height:40px;padding:0 12px;border-radius:12px;
+  background:rgba(0,0,0,.35);border:1px solid var(--line);color:var(--mut);transition:.2s}
+.hub-search-box:focus-within{border-color:rgba(124,92,255,.8);box-shadow:0 0 0 3px rgba(124,92,255,.2);color:#fff}
+.hub-search-in{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--txt);font-size:13px}
+.hub-search-in::placeholder{color:#6b7090}
+.hub-search-clear{width:22px;height:22px;border-radius:50%;display:none;place-items:center;color:var(--mut);background:rgba(255,255,255,.08);font-size:11px}
+.hub-search-clear.on{display:grid}
+.hub-search-clear:hover{background:#ff4d63;color:#fff}
+.hub-search-badge{font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(255,255,255,.08);color:var(--mut);flex-shrink:0}
+
+.folder-pills{display:flex;gap:7px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.folder-pills::-webkit-scrollbar{display:none}
+.folder-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:10px;font-size:12px;
+  white-space:nowrap;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--mut);transition:.15s;cursor:pointer}
+.folder-pill:hover{color:#fff;background:rgba(255,255,255,.1)}
+.folder-pill.active{color:#fff;background:linear-gradient(135deg,rgba(124,92,255,.35),rgba(0,212,255,.2));
+  border-color:rgba(124,92,255,.7);box-shadow:0 2px 10px rgba(124,92,255,.25)}
+.folder-pill .cnt{font-size:10.5px;padding:1px 6px;border-radius:999px;background:rgba(0,0,0,.35);color:inherit}
+
+.folder-sec{margin-bottom:24px}
+.folder-sec:last-child{margin-bottom:8px}
+.folder-sec-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.06)}
+.folder-sec-title{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;color:#fff}
+.folder-sec-badge{font-size:11px;font-weight:500;color:var(--mut);padding:2px 7px;border-radius:6px;background:rgba(255,255,255,.06)}
+.folder-sec-btn{font-size:11.5px;color:var(--mut);padding:4px 8px;border-radius:6px;transition:.15s}
+.folder-sec-btn:hover{color:#fff;background:rgba(255,255,255,.08)}
 
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px}
 .card{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 12px 16px;border-radius:16px;
@@ -195,13 +233,23 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
 .card .ico{margin-bottom:4px;box-shadow:0 8px 20px rgba(0,0,0,.35)}
 .nm{font-weight:650;font-size:13.5px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dm{font-size:11px;color:var(--mut);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .folder-tag{margin-top:2px;font-size:10px;color:var(--mut);padding:2px 6px;border-radius:6px;background:rgba(255,255,255,.06);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .card .rm{position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
   color:var(--mut);background:rgba(0,0,0,.35);opacity:0;transform:scale(.8);transition:.15s}
 .card:hover .rm{opacity:1;transform:none}
 .card .rm:hover{background:#ff4d63;color:#fff}
+.card .ed{position:absolute;top:8px;left:8px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+  color:var(--mut);background:rgba(0,0,0,.35);opacity:0;transform:scale(.8);transition:.15s}
+.card:hover .ed{opacity:1;transform:none}
+.card .ed:hover{background:var(--a1);color:#fff}
 .card.add{justify-content:center;background:transparent;border:1.5px dashed rgba(255,255,255,.18);color:var(--mut)}
 .card.add:hover{color:#fff;border-color:rgba(124,92,255,.8)}
 .plus{width:54px;height:54px;border-radius:28%;display:grid;place-items:center;background:rgba(255,255,255,.06);margin-bottom:4px}
+
+.search-empty{padding:36px 16px;text-align:center;color:var(--mut)}
+.search-empty svg{margin:0 auto 10px;opacity:.5;display:block}
+.search-empty h3{margin:0 0 6px;font-size:15px;color:var(--txt)}
+.search-empty p{margin:0 0 14px;font-size:12px}
 
 .ico{display:grid;place-items:center;border-radius:28%;color:#fff;font-weight:800;flex-shrink:0;overflow:hidden;user-select:none}
 .ico.has-img{background:#fff}
@@ -524,9 +572,102 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   stage.addEventListener("pointerdown", focusFrame);
   stage.addEventListener("mouseenter", () => { if (current) focusFrame(); });
 
-  // === Gestion des favoris ===
-  function removeFav(i) {
-    const [r] = favs.splice(i, 1);
+  // === Gestion des favoris & dossiers ===
+  let searchQuery = "";
+  let selectedFolder = "ALL";
+
+  const cleanStr = (s) =>
+    (s || "")
+      .toString()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+
+  const getFolderList = () => {
+    const list = Array.from(new Set(favs.map((f) => f.folder || "Favoris"))).filter(Boolean);
+    return list.sort((a, b) => a.localeCompare(b, "fr"));
+  };
+
+  const folderEmoji = (fName) => {
+    const fn = cleanStr(fName);
+    if (fn.includes("zombie") || fn.includes("cod") || fn.includes("duty")) return "🧟";
+    if (fn.includes("fps") || fn.includes("retro") || fn.includes("shoot") || fn.includes("classique")) return "🎯";
+    if (fn.includes("gta") || fn.includes("world") || fn.includes("monde")) return "🚗";
+    if (fn.includes("course") || fn.includes("glisse") || fn.includes("sport") || fn.includes("skate") || fn.includes("kart")) return "🏎️";
+    if (fn.includes("roblox") || fn.includes("multi")) return "👥";
+    if (fn.includes("stream") || fn.includes("outil") || fn.includes("util") || fn.includes("anime")) return "🎬";
+    return "📁";
+  };
+
+  const askSite = ({ title = "Favori", name = "", url = "", folder = "Favoris", isEdit = false }) =>
+    new Promise((resolve) => {
+      const urlInp = isEdit ? h("input", { class: "m-in", type: "text", value: url, spellcheck: "false", placeholder: "https://..." }) : null;
+      const nameInp = h("input", { class: "m-in", type: "text", value: name, spellcheck: "false", placeholder: "Nom du site" });
+      const folderInp = h("input", { class: "m-in", type: "text", value: folder, spellcheck: "false", placeholder: "Nom du dossier" });
+
+      const done = (val) => {
+        modal.classList.remove("on");
+        modal.replaceChildren();
+        resolve(val);
+      };
+
+      const cancel = h("button", { class: "mbtn", text: "Annuler", onclick: () => done(null) });
+      const okBtn = h("button", {
+        class: "mbtn main", text: isEdit ? "Enregistrer" : "Ajouter",
+        onclick: () => {
+          const n = nameInp.value.trim();
+          const f = folderInp.value.trim() || "Favoris";
+          const u = urlInp ? urlInp.value.trim() : url;
+          if (!n) { nameInp.focus(); return; }
+          if (urlInp && (!u || !isValid(u))) { toast("Lien invalide"); urlInp.focus(); return; }
+          done({ name: n, folder: f, url: u ? normalizeUrl(u) : url });
+        },
+      });
+
+      const existingFolders = getFolderList();
+      const folderPills = existingFolders.length > 0
+        ? h("div", { style: "display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px" },
+            ...existingFolders.map((fName) =>
+              h("button", {
+                class: "ghost",
+                type: "button",
+                style: "padding:3px 8px;font-size:11px",
+                text: `${folderEmoji(fName)} ${fName}`,
+                onclick: () => { folderInp.value = fName; },
+              })
+            )
+          )
+        : null;
+
+      const fields = [
+        h("h3", { text: title }),
+        isEdit ? h("div", {}, h("label", { style: "display:block;font-size:11px;color:var(--mut);margin-bottom:3px", text: "URL" }), urlInp) : null,
+        h("label", { style: "display:block;font-size:11px;color:var(--mut);margin-bottom:3px", text: "Nom du site" }),
+        nameInp,
+        h("label", { style: "display:block;font-size:11px;color:var(--mut);margin-bottom:3px", text: "Dossier / Fichier de rangement" }),
+        folderInp,
+        folderPills,
+        h("div", { class: "mact" }, cancel, okBtn),
+      ];
+
+      const card = h("div", { class: "mcard" }, ...fields.filter(Boolean));
+      card.addEventListener("keydown", (e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") okBtn.click();
+        if (e.key === "Escape") cancel.click();
+      });
+
+      modal.replaceChildren(card);
+      modal.classList.add("on");
+      (nameInp || urlInp).focus();
+      (nameInp || urlInp).select();
+    });
+
+  function removeFav(fav) {
+    const idx = favs.indexOf(fav);
+    if (idx === -1) return;
+    const [r] = favs.splice(idx, 1);
     persist();
     toast(`${r.name} retiré`);
     render();
@@ -539,95 +680,350 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     if (!isValid(raw)) { toast("Lien invalide"); return; }
     const full = normalizeUrl(raw);
     if (favs.some((f) => sameSite(f.url, full))) { toast("Déjà dans ton hub"); return; }
-    const name = await ask({
-      title: "Nom du site", message: getDomain(full),
-      value: guessName(getDomain(full)), ok: "Ajouter",
+    const res = await askSite({
+      title: "Ajouter un site",
+      name: guessName(getDomain(full)),
+      url: full,
+      folder: selectedFolder !== "ALL" ? selectedFolder : "Favoris",
+      isEdit: false,
     });
-    if (!name) return;
-    favs.push({ name, url: full });
+    if (!res) return;
+    favs.push({ name: res.name, url: full, folder: res.folder });
     persist();
-    toast("Ajouté au hub ✓");
+    toast(`${res.name} ajouté au hub ✓`);
     render();
     updateStar();
   }
 
-  // === Rendu ===
+  // Éléments du Hub
+  const hubSubtitle = h("p");
+  const resetBtn = h("button", {
+    class: "ghost",
+    onclick: async () => {
+      const yes = await ask({
+        title: "Réinitialiser le hub ?",
+        message: "Tes sites seront remplacés par la liste organisée de sites.json.",
+        ok: "Réinitialiser", danger: true,
+      });
+      if (!yes) return;
+      const list = await fetchSites();
+      if (!list) { toast("Impossible de charger sites.json"); return; }
+      favs = list.map((s) => ({ name: s.name, url: s.url, folder: s.folder || s.category || "Favoris" }));
+      try { localStorage.setItem(REMOTE_KEY, JSON.stringify(favs.map((f) => getDomain(f.url)))); } catch {}
+      persist();
+      render();
+      updateStar();
+      toast("Hub réinitialisé avec les dossiers");
+    },
+  }, ico(P.reset, 13), h("span", { text: "Réinitialiser" }));
+
+  const hubHead = h("div", { class: "hub-head" },
+    h("div", {}, h("h2", { text: "Ton hub" }), hubSubtitle),
+    resetBtn
+  );
+
+  const searchInput = h("input", {
+    class: "hub-search-in",
+    type: "text",
+    placeholder: "Rechercher un site, un jeu, un dossier... (Raccourci: /)",
+    spellcheck: "false",
+    autocomplete: "off",
+  });
+  const searchClear = h("button", { class: "hub-search-clear", title: "Effacer la recherche" }, ico(P.close, 12));
+  const searchBadge = h("span", { class: "hub-search-badge" });
+  const searchBox = h("div", { class: "hub-search-box" }, ico(P.search, 15), searchInput, searchClear, searchBadge);
+  const folderPillsWrap = h("div", { class: "folder-pills" });
+  const hubToolbar = h("div", { class: "hub-toolbar" }, searchBox, folderPillsWrap);
+  const hubContent = h("div", { class: "hub-content" });
+
+  hub.replaceChildren(hubHead, hubToolbar, hubContent);
+
+  // Recherche dynamique
+  searchInput.addEventListener("input", () => {
+    searchQuery = searchInput.value;
+    searchClear.classList.toggle("on", !!searchQuery);
+    renderHubContent();
+  });
+  searchClear.addEventListener("click", () => {
+    searchInput.value = "";
+    searchQuery = "";
+    searchClear.classList.remove("on");
+    renderHubContent();
+    searchInput.focus();
+  });
+  searchInput.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Escape") {
+      if (searchInput.value) {
+        searchInput.value = "";
+        searchQuery = "";
+        searchClear.classList.remove("on");
+        renderHubContent();
+      } else {
+        searchInput.blur();
+      }
+    }
+  });
+
+  const makeCard = (fav, animIndex = 0) => {
+    const rm = h("button", { class: "rm", title: "Retirer" }, ico(P.close, 12));
+    rm.addEventListener("click", (e) => { e.stopPropagation(); removeFav(fav); });
+
+    const ed = h("button", { class: "ed", title: "Modifier / Ranger dans un dossier" }, ico(P.edit, 12));
+    ed.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const res = await askSite({
+        title: "Modifier le favori",
+        name: fav.name,
+        url: fav.url,
+        folder: fav.folder || "Favoris",
+        isEdit: true,
+      });
+      if (!res) return;
+      fav.name = res.name;
+      fav.url = res.url;
+      fav.folder = res.folder;
+      persist();
+      render();
+      toast("Favori mis à jour ✓");
+    });
+
+    const card = h("div", { class: "card", role: "button", tabindex: "0" },
+      ed, rm,
+      makeIcon(fav, 52),
+      h("div", { class: "nm", text: fav.name }),
+      h("div", { class: "dm", text: getDomain(fav.url) }),
+      h("div", { class: "folder-tag", text: `${folderEmoji(fav.folder || "Favoris")} ${fav.folder || "Favoris"}` })
+    );
+    card.style.setProperty("--i", animIndex);
+    card.addEventListener("click", () => openUrl(fav.url));
+    card.addEventListener("keydown", (e) => { if (e.key === "Enter") openUrl(fav.url); });
+    return card;
+  };
+
+  const makeCasinoTile = (animIndex = 0) => {
+    const tile = h("div", { class: "card", role: "button", tabindex: "0" },
+      h("div", { class: "ico", style: "width:52px;height:52px;font-size:28px;display:grid;place-items:center;border-radius:16px;background:linear-gradient(135deg,#ffc83d,#ff5d73)", text: "🎰" }),
+      h("div", { class: "nm", text: "Casino" }),
+      h("div", { class: "dm", text: "jetons virtuels" }),
+      h("div", { class: "folder-tag", text: "🎲 Jeux & Jetons" })
+    );
+    tile.style.setProperty("--i", animIndex);
+    tile.addEventListener("click", openCasino);
+    tile.addEventListener("keydown", (e) => { if (e.key === "Enter") openCasino(); });
+    return tile;
+  };
+
+  const makeAddTile = (defaultFolder = "Favoris", animIndex = 0) => {
+    const tile = h("button", {
+      class: "card add",
+      onclick: async () => {
+        const res = await askSite({
+          title: "Ajouter un site",
+          name: "",
+          url: "",
+          folder: defaultFolder,
+          isEdit: true,
+        });
+        if (!res) return;
+        if (favs.some((f) => sameSite(f.url, res.url))) { toast("Déjà dans ton hub"); return; }
+        favs.push({ name: res.name, url: res.url, folder: res.folder });
+        persist();
+        render();
+        toast(`${res.name} ajouté au hub ✓`);
+      },
+    },
+      h("div", { class: "plus" }, ico(P.plus, 22)),
+      h("div", { class: "nm", text: "Ajouter un site" }),
+      h("div", { class: "dm", text: "Nouveau lien" }),
+      h("div", { class: "folder-tag", text: `📁 ${defaultFolder}` })
+    );
+    tile.style.setProperty("--i", animIndex);
+    return tile;
+  };
+
+  function renderHubContent() {
+    const q = cleanStr(searchQuery);
+
+    if (q) {
+      // Mode recherche active
+      const matches = favs.filter((f) => {
+        const n = cleanStr(f.name);
+        const u = cleanStr(f.url);
+        const d = cleanStr(getDomain(f.url));
+        const fol = cleanStr(f.folder);
+        return n.includes(q) || u.includes(q) || d.includes(q) || fol.includes(q);
+      });
+
+      searchBadge.textContent = `${matches.length} trouvé${matches.length > 1 ? "s" : ""}`;
+
+      if (matches.length === 0) {
+        const clearBtn = h("button", {
+          class: "mbtn main",
+          text: "Effacer la recherche",
+          onclick: () => {
+            searchInput.value = "";
+            searchQuery = "";
+            searchClear.classList.remove("on");
+            renderHubContent();
+            searchInput.focus();
+          },
+        });
+        hubContent.replaceChildren(
+          h("div", { class: "search-empty" },
+            ico(P.search, 36),
+            h("h3", { text: "Aucun résultat" }),
+            h("p", { text: `Aucun favori ne correspond à "${searchQuery}".` }),
+            clearBtn
+          )
+        );
+        return;
+      }
+
+      const grid = h("div", { class: "grid" },
+        ...matches.map((fav, i) => makeCard(fav, i))
+      );
+      const resHead = h("div", { style: "display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;color:var(--mut);font-size:12px" },
+        h("span", { text: `Résultats pour "${searchQuery}" (${matches.length})` }),
+        h("button", {
+          class: "ghost",
+          style: "padding:3px 8px;font-size:11px",
+          text: "Effacer",
+          onclick: () => {
+            searchInput.value = "";
+            searchQuery = "";
+            searchClear.classList.remove("on");
+            renderHubContent();
+            searchInput.focus();
+          },
+        })
+      );
+      hubContent.replaceChildren(resHead, grid);
+      return;
+    }
+
+    // Pas de recherche textuelle : affichage par dossiers
+    searchBadge.textContent = `${favs.length} sites`;
+
+    if (selectedFolder !== "ALL") {
+      // Un seul dossier sélectionné
+      const folderFavs = favs.filter((f) => (f.folder || "Favoris") === selectedFolder);
+      const secHead = h("div", { class: "folder-sec-head" },
+        h("div", { class: "folder-sec-title" },
+          h("span", { text: `${folderEmoji(selectedFolder)} ${selectedFolder}` }),
+          h("span", { class: "folder-sec-badge", text: `${folderFavs.length} site${folderFavs.length > 1 ? "s" : ""}` })
+        ),
+        h("button", {
+          class: "ghost",
+          style: "padding:4px 8px;font-size:11.5px",
+          text: "← Voir tous les dossiers",
+          onclick: () => {
+            selectedFolder = "ALL";
+            render();
+          },
+        })
+      );
+      const grid = h("div", { class: "grid" },
+        ...folderFavs.map((fav, i) => makeCard(fav, i)),
+        makeAddTile(selectedFolder, folderFavs.length)
+      );
+      hubContent.replaceChildren(h("div", { class: "folder-sec" }, secHead, grid));
+      return;
+    }
+
+    // Affichage "Tous les dossiers" : groupé par dossier avec sections
+    const folders = getFolderList();
+    const sections = [];
+    let animCount = 0;
+
+    for (const fName of folders) {
+      const folderFavs = favs.filter((f) => (f.folder || "Favoris") === fName);
+      if (folderFavs.length === 0) continue;
+
+      const secHead = h("div", { class: "folder-sec-head" },
+        h("div", { class: "folder-sec-title" },
+          h("span", { text: `${folderEmoji(fName)} ${fName}` }),
+          h("span", { class: "folder-sec-badge", text: `${folderFavs.length}` })
+        ),
+        h("button", {
+          class: "folder-sec-btn",
+          text: "Filtrer ce dossier",
+          onclick: () => {
+            selectedFolder = fName;
+            render();
+          },
+        })
+      );
+
+      const grid = h("div", { class: "grid" },
+        ...folderFavs.map((fav) => makeCard(fav, animCount++))
+      );
+
+      sections.push(h("div", { class: "folder-sec" }, secHead, grid));
+    }
+
+    // Section Casino & Ajout
+    const extraHead = h("div", { class: "folder-sec-head" },
+      h("div", { class: "folder-sec-title" },
+        h("span", { text: "🎲 Jeux & Nouveaux Sites" }),
+        h("span", { class: "folder-sec-badge", text: "Bonus" })
+      )
+    );
+    const extraGrid = h("div", { class: "grid" },
+      makeCasinoTile(animCount++),
+      makeAddTile("Favoris", animCount++)
+    );
+    sections.push(h("div", { class: "folder-sec" }, extraHead, extraGrid));
+
+    hubContent.replaceChildren(...sections);
+  }
+
+  // === Rendu global ===
   function render() {
-    // Onglets
+    // Onglets supérieurs
     const home = h("button", { class: "chip home" + (current || casinoOn ? "" : " active"), onclick: showHub },
       ico(P.home, 14), h("span", { text: "Hub" }));
     tabs.replaceChildren(
       home,
-      ...favs.map((fav, i) => {
+      ...favs.map((fav) => {
         const x = h("span", { class: "x", title: "Retirer" }, ico(P.close, 11));
-        x.addEventListener("click", (e) => { e.stopPropagation(); removeFav(i); });
+        x.addEventListener("click", (e) => { e.stopPropagation(); removeFav(fav); });
         return h("button", {
           class: "chip" + (current && sameSite(current, fav.url) ? " active" : ""),
-          title: fav.url, onclick: () => openUrl(fav.url),
+          title: `${fav.name} (${fav.folder || "Favoris"}) - ${fav.url}`,
+          onclick: () => openUrl(fav.url),
         }, makeIcon(fav, 20), h("span", { text: fav.name }), x);
       })
     );
 
-    // Hub
-    const resetBtn = h("button", {
-      class: "ghost",
-      onclick: async () => {
-        const yes = await ask({
-          title: "Réinitialiser le hub ?",
-          message: "Tes sites seront remplacés par la liste de sites.json.",
-          ok: "Réinitialiser", danger: true,
-        });
-        if (!yes) return;
-        const list = await fetchSites();
-        if (!list) { toast("Impossible de charger sites.json"); return; }
-        favs = list.map((s) => ({ name: s.name, url: s.url }));
-        try { localStorage.setItem(REMOTE_KEY, JSON.stringify(favs.map((f) => getDomain(f.url)))); } catch {}
-        persist();
+    // Sous-titre du Hub
+    const folders = getFolderList();
+    hubSubtitle.textContent = `${favs.length} site${favs.length > 1 ? "s" : ""} dans ${folders.length} dossier${folders.length > 1 ? "s" : ""} · clique pour ouvrir`;
+
+    // Filtres en pilules des dossiers
+    const allPill = h("button", {
+      class: "folder-pill" + (selectedFolder === "ALL" ? " active" : ""),
+      onclick: () => {
+        selectedFolder = "ALL";
         render();
-        updateStar();
-        toast("Hub réinitialisé");
       },
-    }, ico(P.reset, 13), h("span", { text: "Réinitialiser" }));
+    }, h("span", { text: "📁 Tous" }), h("span", { class: "cnt", text: favs.length }));
 
-    const head = h("div", { class: "hub-head" },
-      h("div", {},
-        h("h2", { text: "Ton hub" }),
-        h("p", { text: `${favs.length} site${favs.length > 1 ? "s" : ""} · clique pour ouvrir` })
-      ),
-      resetBtn
-    );
-
-    const cards = favs.map((fav, i) => {
-      const rm = h("button", { class: "rm", title: "Retirer" }, ico(P.close, 12));
-      rm.addEventListener("click", (e) => { e.stopPropagation(); removeFav(i); });
-      const card = h("div", { class: "card", role: "button", tabindex: "0" },
-        rm, makeIcon(fav, 54),
-        h("div", { class: "nm", text: fav.name }),
-        h("div", { class: "dm", text: getDomain(fav.url) })
-      );
-      card.style.setProperty("--i", i);
-      card.addEventListener("click", () => openUrl(fav.url));
-      card.addEventListener("keydown", (e) => { if (e.key === "Enter") openUrl(fav.url); });
-      return card;
+    const pills = folders.map((fName) => {
+      const count = favs.filter((f) => (f.folder || "Favoris") === fName).length;
+      return h("button", {
+        class: "folder-pill" + (selectedFolder === fName ? " active" : ""),
+        onclick: () => {
+          selectedFolder = fName;
+          render();
+        },
+      }, h("span", { text: `${folderEmoji(fName)} ${fName}` }), h("span", { class: "cnt", text: count }));
     });
 
-    const casinoTile = h("div", { class: "card", role: "button", tabindex: "0" },
-      h("div", { class: "ico", style: "width:54px;height:54px;font-size:30px;display:grid;place-items:center;border-radius:16px;background:linear-gradient(135deg,#ffc83d,#ff5d73)", text: "🎰" }),
-      h("div", { class: "nm", text: "Casino" }),
-      h("div", { class: "dm", text: "jetons virtuels" })
-    );
-    casinoTile.style.setProperty("--i", favs.length);
-    casinoTile.addEventListener("click", openCasino);
-    casinoTile.addEventListener("keydown", (e) => { if (e.key === "Enter") openCasino(); });
+    folderPillsWrap.replaceChildren(allPill, ...pills);
 
-    const addTile = h("button", { class: "card add", onclick: () => input.focus() },
-      h("div", { class: "plus" }, ico(P.plus, 22)),
-      h("div", { class: "nm", text: "Ajouter un site" }),
-      h("div", { class: "dm", text: "Colle un lien en haut" })
-    );
-    addTile.style.setProperty("--i", favs.length + 1);
-
-    hub.replaceChildren(head, h("div", { class: "grid" }, ...cards, casinoTile, addTile));
+    // Contenu du Hub
+    renderHubContent();
   }
 
   // === Actions ===
@@ -761,11 +1157,22 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
 
     let added = 0, updated = 0, removed = 0;
 
-    // Ajoute les sites manquants, met à jour nom/lien des existants
+    // Ajoute les sites manquants, met à jour nom/lien/dossier des existants
     for (const s of list) {
+      const folder = s.folder || s.category || "Favoris";
       const f = favs.find((x) => sameSite(x.url, s.url));
-      if (!f) { favs.push({ name: s.name, url: s.url }); added++; }
-      else if (f.name !== s.name || f.url !== s.url) { f.name = s.name; f.url = s.url; updated++; }
+      if (!f) {
+        favs.push({ name: s.name, url: s.url, folder });
+        added++;
+      } else {
+        let changed = false;
+        if (f.name !== s.name) { f.name = s.name; changed = true; }
+        if (f.url !== s.url) { f.url = s.url; changed = true; }
+        if (s.folder && (!f.folder || f.folder === "Favoris" || prev.includes(getDomain(f.url)))) {
+          if (f.folder !== s.folder) { f.folder = s.folder; changed = true; }
+        }
+        if (changed) updated++;
+      }
     }
 
     // Retire les sites qui venaient du JSON et n'y sont plus (tes sites perso restent)
@@ -788,6 +1195,19 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   syncRemote();
   const syncTimer = setInterval(() => { host.isConnected ? syncRemote() : clearInterval(syncTimer); }, REFRESH_MS);
 
+  // Focus recherche avec la touche "/"
+  document.addEventListener("keydown", (e) => {
+    if (host.isConnected && e.key === "/" && !win.classList.contains("hidden") && !current && !casinoOn) {
+      const activeEl = root.activeElement || document.activeElement;
+      const tag = (activeEl && activeEl.tagName) || "";
+      if (tag !== "INPUT" && tag !== "TEXTAREA") {
+        e.preventDefault();
+        searchInput.focus();
+        searchInput.select();
+      }
+    }
+  });
+
   // === Raccourcis clavier (Alt + ...) — actifs quand le focus n'est pas dans le jeu ===
   // Alt+S ajouter/retirer le site actuel · Alt+1..9 ouvrir un favori · Alt+H hub
   // Alt+R recharger · Alt+Z page entière · Alt+A anti-pub · Alt+M réduire/rouvrir
@@ -805,8 +1225,8 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     else if (code === "KeyS") {
       if (!current) toast("Ouvre d'abord un site");
       else {
-        const i = favs.findIndex((f) => sameSite(f.url, current));
-        if (i >= 0) removeFav(i);
+        const found = favs.find((f) => sameSite(f.url, current));
+        if (found) removeFav(found);
         else { input.value = current; addFromInput(); }
       }
     }
