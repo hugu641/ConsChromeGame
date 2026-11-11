@@ -1,8 +1,15 @@
 name = "floatframe-casino"
 main = "src/index.js"
-compatibility_date = "2025-01-01"
+compatibility_date = "2026-10-16"
+preview_urls = false
 
 [[d1_databases]]
 binding = "DB"
 database_name = "floatframe-casino"
-database_id = "REMPLACE_PAR_TON_DATABASE_ID"
+database_id = "d38d613f-66ae-4c02-9e61-5cfeec546b37"
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
