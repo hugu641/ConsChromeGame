@@ -70,6 +70,8 @@
     folder: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z",
     edit: "M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z",
     bulb: "M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.6 1.4 4.8 3.5 6h7c2.1-1.2 3.5-3.4 3.5-6a7 7 0 0 0-7-7z",
+    send: "M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z",
+    zap: "M13 2L3 14h9l-1 8 10-12h-9l1-8z",
   };
   const NS = "http://www.w3.org/2000/svg";
   const ico = (d, size = 16) => {
@@ -152,16 +154,19 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
 .prog.show{opacity:1}
 .prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--a1),var(--a2));box-shadow:0 0 10px var(--a2);transition:width .8s ease-out}
 
-.tabs{display:flex;gap:7px;padding:9px 12px;overflow-x:auto;scrollbar-width:none;flex-shrink:0}
+.tabs{display:flex;align-items:center;gap:6px;padding:7px 12px;overflow-x:auto;scrollbar-width:none;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,.05)}
 .tabs::-webkit-scrollbar{display:none}
-.chip{display:flex;align-items:center;gap:7px;padding:5px 9px 5px 6px;border-radius:999px;white-space:nowrap;flex-shrink:0;font-size:12.5px;
-  background:rgba(255,255,255,.055);border:1px solid var(--line);transition:.18s}
-.chip.home{padding-left:11px}
-.chip:hover{background:rgba(255,255,255,.11);transform:translateY(-1px)}
-.chip.active{background:linear-gradient(135deg,rgba(124,92,255,.38),rgba(0,212,255,.22));border-color:rgba(124,92,255,.7);box-shadow:0 4px 16px rgba(124,92,255,.25)}
-.chip .x{width:0;height:16px;border-radius:50%;display:grid;place-items:center;color:var(--mut);opacity:0;overflow:hidden;transition:.15s}
-.chip:hover .x{opacity:1;width:16px}
-.chip .x:hover{background:#ff4d63;color:#fff}
+.tab-chip{display:flex;align-items:center;gap:6px;max-width:180px;min-width:64px;padding:5px 9px;border-radius:10px;white-space:nowrap;flex-shrink:0;font-size:12px;cursor:pointer;
+  background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--mut);transition:.15s;user-select:none}
+.tab-chip:hover{background:rgba(255,255,255,.1);color:#fff;transform:translateY(-1px)}
+.tab-chip.active{background:linear-gradient(135deg,rgba(124,92,255,.38),rgba(0,212,255,.22));border-color:rgba(124,92,255,.7);color:#fff;box-shadow:0 2px 12px rgba(124,92,255,.25)}
+.tab-chip .tab-ttl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;font-weight:550}
+.tab-chip .tab-x{width:16px;height:16px;border-radius:50%;display:grid;place-items:center;color:var(--mut);opacity:.6;margin-left:3px;transition:.12s;flex-shrink:0}
+.tab-chip:hover .tab-x{opacity:1}
+.tab-chip .tab-x:hover{background:#ff4d63;color:#fff}
+.tab-add{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;color:var(--mut);background:rgba(255,255,255,.04);border:1px solid var(--line);cursor:pointer;flex-shrink:0;transition:.15s}
+.tab-add:hover{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.2);transform:scale(1.05)}
+.eco-badge{margin-left:auto;display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:8px;font-size:10px;font-weight:600;color:#3ddc97;background:rgba(61,220,151,.1);border:1px solid rgba(61,220,151,.25);flex-shrink:0;user-select:none}
 
 .addr{display:flex;align-items:center;gap:8px;padding:2px 12px 10px;flex-shrink:0}
 .btn{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex-shrink:0;color:#c9cde0;
@@ -169,6 +174,7 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
 .btn:hover{background:rgba(255,255,255,.12);color:#fff;transform:translateY(-1px)}
 .btn.on{color:#ffc542;background:rgba(255,197,66,.12);border-color:rgba(255,197,66,.4)}
 .btn.on svg{fill:#ffc542}
+.btn.req:hover{color:#fff;background:rgba(124,92,255,.2);border-color:rgba(124,92,255,.5)}
 .btn.shield.on{color:#3ddc97;background:rgba(61,220,151,.12);border-color:rgba(61,220,151,.4)}
 .btn.shield.on svg{fill:none}
 .url{flex:1;min-width:0;height:36px;display:flex;align-items:center;gap:8px;padding:0 4px 0 12px;border-radius:11px;
@@ -240,6 +246,10 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   color:var(--mut);background:rgba(0,0,0,.35);opacity:0;transform:scale(.8);transition:.15s}
 .card:hover .rm{opacity:1;transform:none}
 .card .rm:hover{background:#ff4d63;color:#fff}
+.card .rq{position:absolute;top:8px;right:34px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+  color:var(--mut);background:rgba(0,0,0,.35);opacity:0;transform:scale(.8);transition:.15s}
+.card:hover .rq{opacity:1;transform:none}
+.card .rq:hover{background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff}
 .card .ed{position:absolute;top:8px;left:8px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
   color:var(--mut);background:rgba(0,0,0,.35);opacity:0;transform:scale(.8);transition:.15s}
 .card:hover .ed{opacity:1;transform:none}
@@ -365,14 +375,15 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   const btnReload = h("button", { class: "btn", title: "Recharger" }, ico(P.reload, 16));
   const input = h("input", { type: "text", placeholder: "Colle un lien (ex: monsite.com)", spellcheck: "false", autocomplete: "off" });
   const btnGo = h("button", { class: "go", title: "Ouvrir" }, ico(P.arrow, 16));
-  const btnStar = h("button", { class: "btn", title: "Ajouter au hub" }, ico(P.star, 17));
+  const btnStar = h("button", { class: "btn", title: "Ajouter au hub (Admin)" }, ico(P.star, 17));
+  const btnReq = h("button", { class: "btn req", title: "Proposer ce site en favori (Request Discord)" }, ico(P.send, 15));
   const btnShield = h("button", { class: "btn shield", title: "Anti-pub (Alt+A)" }, ico(P.shield, 16));
   const btnFull = h("button", { class: "btn", title: "Page entière (Alt+Z)" }, ico(P.full, 16));
   const btnExit = h("button", { class: "exitfs", title: "Quitter (Échap)" }, ico(P.exitfull, 18));
   const addr = h("div", { class: "addr" },
     btnHome, btnReload,
     h("div", { class: "url" }, ico(P.link, 15), input, btnGo),
-    btnStar, btnShield, btnFull
+    btnStar, btnReq, btnShield, btnFull
   );
 
   // Contenu
@@ -490,9 +501,22 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     }
   };
 
-  // === Navigation ===
+  // === Système Multi-Onglets Optimisé (Zero Ressource) ===
+  // Quand un onglet n'est pas actif/ouvert, son iframe est déchargée (src = "about:blank").
+  // Zéro script, zéro WebGL, zéro audio en arrière-plan -> zéro ressource CPU/GPU consommée.
+  let openTabs = [
+    { id: "tab-1", type: "hub", name: "Hub", url: "" }
+  ];
+  let activeTabId = "tab-1";
+  let tabIdCounter = 1;
+
+  const getActiveTab = () => openTabs.find((t) => t.id === activeTabId) || openTabs[0];
+
   let current = null;
-  const sameSite = (a, b) => getDomain(a) === getDomain(b);
+  const sameSite = (a, b) => {
+    if (!a || !b) return false;
+    return getDomain(a) === getDomain(b);
+  };
 
   const updateStar = () => {
     const saved = current && favs.some((f) => sameSite(f.url, current));
@@ -502,64 +526,145 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   let casinoOn = false;
   let casinoMod = null;
 
-  function showHub() {
-    current = null;
-    casinoOn = false;
-    casinoPane.classList.remove("on");
-    win.classList.remove("full");
-    frame.src = "about:blank";
-    frame.classList.remove("on");
-    hub.classList.remove("off");
-    setLoading(false);
-    input.value = "";
-    titleMain.textContent = "FloatFrame";
-    titleSub.textContent = "Ton hub de sites";
-    render();
-    updateStar();
+  function createTab({ type = "hub", name = "Hub", url = "" } = {}, makeActive = true) {
+    tabIdCounter++;
+    const newTab = { id: "tab-" + tabIdCounter, type, name, url };
+    openTabs.push(newTab);
+    if (makeActive) {
+      switchTab(newTab.id);
+    } else {
+      renderTabs();
+    }
+    return newTab;
   }
 
-  async function openCasino() {
-    current = null;
-    casinoOn = true;
-    win.classList.remove("full");
+  function closeTab(tabId, e) {
+    if (e) e.stopPropagation();
+    const idx = openTabs.findIndex((t) => t.id === tabId);
+    if (idx === -1) return;
+
+    if (openTabs.length === 1) {
+      // Dernier onglet : on le réinitialise sur le Hub
+      openTabs[0].type = "hub";
+      openTabs[0].name = "Hub";
+      openTabs[0].url = "";
+      switchTab(openTabs[0].id);
+      return;
+    }
+
+    const wasActive = activeTabId === tabId;
+    openTabs.splice(idx, 1);
+
+    if (wasActive) {
+      const nextIdx = Math.max(0, idx - 1);
+      switchTab(openTabs[nextIdx].id);
+    } else {
+      renderTabs();
+    }
+  }
+
+  async function switchTab(tabId) {
+    const target = openTabs.find((t) => t.id === tabId);
+    if (!target) return;
+
+    // Déchargement immédiat de l'iframe : aucune ressource gaspillée en tâche de fond
     frame.src = "about:blank";
     frame.classList.remove("on");
     hub.classList.add("off");
-    casinoPane.classList.add("on");
-    setLoading(false);
-    input.value = "";
-    titleMain.textContent = "Casino";
-    titleSub.textContent = "Monnaie virtuelle · jeux gérés par le serveur";
-    render();
-    updateStar();
-    try {
-      if (!casinoMod) {
-        const r = await fetch(CASINO_URL + "?t=" + Date.now(), { cache: "no-store" });
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        casinoMod = new Function("ctx", await r.text())({ h, toast, ask, pane: casinoPane });
+    casinoPane.classList.remove("on");
+
+    activeTabId = tabId;
+
+    if (target.type === "hub") {
+      current = null;
+      casinoOn = false;
+      win.classList.remove("full");
+      hub.classList.remove("off");
+      setLoading(false);
+      input.value = "";
+      titleMain.textContent = "FloatFrame";
+      titleSub.textContent = "Ton hub de sites";
+    } else if (target.type === "casino") {
+      current = null;
+      casinoOn = true;
+      win.classList.remove("full");
+      casinoPane.classList.add("on");
+      setLoading(false);
+      input.value = "";
+      titleMain.textContent = "Casino";
+      titleSub.textContent = "Monnaie virtuelle · jeux gérés par le serveur";
+      try {
+        if (!casinoMod) {
+          const r = await fetch(CASINO_URL + "?t=" + Date.now(), { cache: "no-store" });
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          casinoMod = new Function("ctx", await r.text())({ h, toast, ask, pane: casinoPane });
+        }
+        if (casinoOn) await casinoMod.open();
+      } catch (e) {
+        casinoMod = null;
+        casinoPane.replaceChildren(h("p", { style: "padding:24px;text-align:center;color:#ff5d73", text: "Casino indisponible : " + (e.message || e) }));
       }
-      if (casinoOn) await casinoMod.open();
-    } catch (e) {
-      casinoMod = null;
-      casinoPane.replaceChildren(h("p", { style: "padding:24px;text-align:center;color:#ff5d73", text: "Casino indisponible : " + (e.message || e) }));
+    } else {
+      // Type "site" : seul l'onglet actif est chargé dans l'iframe
+      current = target.url;
+      casinoOn = false;
+      frame.classList.add("on");
+      setLoading(true);
+      frame.src = target.url; // Chargement optimisé à la demande
+      input.value = target.url;
+      titleMain.textContent = target.name;
+      titleSub.textContent = target.url;
+    }
+
+    renderTabs();
+    renderHub();
+    updateStar();
+  }
+
+  function showHub() {
+    const hubTab = openTabs.find((t) => t.type === "hub");
+    if (hubTab) {
+      switchTab(hubTab.id);
+    } else {
+      createTab({ type: "hub", name: "Hub", url: "" }, true);
+    }
+  }
+
+  function openCasino() {
+    const casTab = openTabs.find((t) => t.type === "casino");
+    if (casTab) {
+      switchTab(casTab.id);
+    } else {
+      createTab({ type: "casino", name: "Casino", url: "" }, true);
     }
   }
 
   function openUrl(u) {
     const full = normalizeUrl(u);
-    current = full;
-    casinoOn = false;
-    casinoPane.classList.remove("on");
-    hub.classList.add("off");
-    frame.classList.add("on");
-    setLoading(true);
-    frame.src = full;
-    input.value = full;
     const fav = favs.find((f) => sameSite(f.url, full));
-    titleMain.textContent = fav ? fav.name : getDomain(full);
-    titleSub.textContent = full;
-    render();
-    updateStar();
+    const name = fav ? fav.name : guessName(getDomain(full));
+
+    // Si cet onglet est déjà ouvert, bascule directement dessus
+    const existing = openTabs.find((t) => t.type === "site" && sameSite(t.url, full));
+    if (existing) {
+      existing.name = name;
+      existing.url = full;
+      switchTab(existing.id);
+      return;
+    }
+
+    const cur = getActiveTab();
+    // Si l'onglet en cours est un Hub et qu'il n'y a qu'1 seul onglet au total, on l'utilise
+    if (cur && cur.type === "hub" && openTabs.length === 1) {
+      cur.type = "site";
+      cur.name = name;
+      cur.url = full;
+      switchTab(cur.id);
+      return;
+    }
+
+    // Sinon, on ouvre dans un nouvel onglet optimisé
+    createTab({ type: "site", name, url: full }, true);
   }
 
   frame.addEventListener("load", () => { if (current) setLoading(false); });
@@ -720,15 +825,47 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     }
   }
 
-  // Modale compacte et scrollable pour proposer un site à l'administrateur
-  const askSuggest = () =>
-    new Promise((resolve) => {
-      const urlVal = input.value.trim() && isValid(input.value.trim()) ? normalizeUrl(input.value.trim()) : "";
-      const nameVal = urlVal ? guessName(getDomain(urlVal)) : "";
+  // Envoi direct d'une requête de favori vers Discord
+  async function sendSiteRequest(site) {
+    toast(`Envoi de "${site.name}" sur Discord...`);
+    try {
+      const r = await fetch(API_URL + "/api/suggest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: site.name,
+          url: site.url,
+          folder: site.folder || "Favoris",
+          author: "Joueur FloatFrame",
+          notes: "Demande de favori envoyée depuis FloatFrame",
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || "Erreur HTTP " + r.status);
+      if (data.discordSent) {
+        toast(`Demande pour "${site.name}" reçue sur Discord ✓`);
+      } else {
+        toast(`Demande pour "${site.name}" enregistrée ✓`);
+      }
+    } catch (err) {
+      toast(`Erreur envoi Discord : ${err.message || err}`);
+    }
+  }
 
-      const nameInp = h("input", { class: "m-in", type: "text", value: nameVal, spellcheck: "false", placeholder: "Nom du site / jeu (ex: Krunker)" });
-      const urlInp = h("input", { class: "m-in", type: "text", value: urlVal, spellcheck: "false", placeholder: "URL (ex: https://krunker.io)" });
-      const folderInp = h("input", { class: "m-in", type: "text", value: selectedFolder !== "ALL" ? selectedFolder : "Jeux", spellcheck: "false", placeholder: "Dossier suggéré" });
+  // Modale compacte et scrollable pour proposer un site à l'administrateur
+  const askSuggest = (init = {}) =>
+    new Promise((resolve) => {
+      const curTab = getActiveTab();
+      const currentUrl = (curTab && curTab.type === "site" && curTab.url) ? curTab.url : (current || "");
+      const rawInp = input.value.trim();
+      const targetUrl = init.url || (rawInp && isValid(rawInp) ? normalizeUrl(rawInp) : currentUrl);
+      const fav = targetUrl ? favs.find((f) => sameSite(f.url, targetUrl)) : null;
+      const targetName = init.name || (fav ? fav.name : (targetUrl ? guessName(getDomain(targetUrl)) : ""));
+      const targetFolder = init.folder || (fav ? fav.folder : (selectedFolder !== "ALL" ? selectedFolder : "Jeux"));
+
+      const nameInp = h("input", { class: "m-in", type: "text", value: targetName, spellcheck: "false", placeholder: "Nom du site / jeu (ex: Krunker)" });
+      const urlInp = h("input", { class: "m-in", type: "text", value: targetUrl, spellcheck: "false", placeholder: "URL (ex: https://krunker.io)" });
+      const folderInp = h("input", { class: "m-in", type: "text", value: targetFolder, spellcheck: "false", placeholder: "Dossier souhaité" });
       const authorInp = h("input", { class: "m-in", type: "text", spellcheck: "false", placeholder: "Ton pseudo ou Discord (optionnel)" });
       const notesInp = h("input", { class: "m-in", type: "text", spellcheck: "false", placeholder: "Note / commentaire pour l'admin (optionnel)" });
       const statusText = h("div", { style: "color:#ff5d73;font-size:11.5px;margin-bottom:8px;display:none" });
@@ -913,6 +1050,9 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     const rm = h("button", { class: "rm", title: "Retirer" }, ico(P.close, 12));
     rm.addEventListener("click", (e) => { e.stopPropagation(); removeFav(fav); });
 
+    const rq = h("button", { class: "rq", title: "Envoyer en request favori sur Discord" }, ico(P.send, 11));
+    rq.addEventListener("click", (e) => { e.stopPropagation(); sendSiteRequest(fav); });
+
     const ed = h("button", { class: "ed", title: "Modifier / Ranger dans un dossier" }, ico(P.edit, 12));
     ed.addEventListener("click", async (e) => {
       e.stopPropagation();
@@ -933,7 +1073,7 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     });
 
     const card = h("div", { class: "card", role: "button", tabindex: "0" },
-      ed, rm,
+      ed, rq, rm,
       makeIcon(fav, 52),
       h("div", { class: "nm", text: fav.name }),
       h("div", { class: "dm", text: getDomain(fav.url) }),
@@ -1136,24 +1276,53 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     hubContent.replaceChildren(...sections);
   }
 
-  // === Rendu global ===
-  function render() {
-    // Onglets supérieurs
-    const home = h("button", { class: "chip home" + (current || casinoOn ? "" : " active"), onclick: showHub },
-      ico(P.home, 14), h("span", { text: "Hub" }));
-    tabs.replaceChildren(
-      home,
-      ...favs.map((fav) => {
-        const x = h("span", { class: "x", title: "Retirer" }, ico(P.close, 11));
-        x.addEventListener("click", (e) => { e.stopPropagation(); removeFav(fav); });
-        return h("button", {
-          class: "chip" + (current && sameSite(current, fav.url) ? " active" : ""),
-          title: `${fav.name} (${fav.folder || "Favoris"}) - ${fav.url}`,
-          onclick: () => openUrl(fav.url),
-        }, makeIcon(fav, 20), h("span", { text: fav.name }), x);
-      })
-    );
+  // === Rendu des Onglets Multi-Onglets Optimisés (Zéro Ressource) ===
+  function renderTabs() {
+    const tabChips = openTabs.map((tab) => {
+      const isActive = tab.id === activeTabId;
+      const x = h("span", { class: "tab-x", title: "Fermer l'onglet (Alt+W)" }, ico(P.close, 11));
+      x.addEventListener("click", (e) => closeTab(tab.id, e));
 
+      let tabIcon;
+      if (tab.type === "hub") {
+        tabIcon = ico(P.home, 13);
+      } else if (tab.type === "casino") {
+        tabIcon = h("span", { style: "font-size:13px;line-height:1" }, "🎰");
+      } else {
+        const dummyFav = { name: tab.name, url: tab.url };
+        tabIcon = makeIcon(dummyFav, 16);
+      }
+
+      const chip = h("div", {
+        class: "tab-chip" + (isActive ? " active" : ""),
+        title: isActive
+          ? `${tab.name} (Onglet actif)`
+          : `${tab.name} (En veille ⚡ 0% ressource - clique pour réveiller)`,
+        onclick: () => switchTab(tab.id),
+      },
+        tabIcon,
+        h("span", { class: "tab-ttl", text: tab.name }),
+        x
+      );
+      return chip;
+    });
+
+    const btnNewTab = h("button", {
+      class: "tab-add",
+      title: "Nouvel onglet (Hub) - Alt+T",
+      onclick: () => createTab({ type: "hub", name: "Hub", url: "" }, true),
+    }, ico(P.plus, 14));
+
+    const ecoBadge = h("div", {
+      class: "eco-badge",
+      title: "Mode optimisé actif : les onglets en arrière-plan ne chargent aucun script ni WebGL (0% CPU / GPU)",
+    }, ico(P.zap, 11), h("span", { text: "Éco 0%" }));
+
+    tabs.replaceChildren(...tabChips, btnNewTab, ecoBadge);
+  }
+
+  // === Rendu du Hub ===
+  function renderHub() {
     // Sous-titre du Hub
     const folders = getFolderList();
     hubSubtitle.textContent = `${favs.length} site${favs.length > 1 ? "s" : ""} dans ${folders.length} dossier${folders.length > 1 ? "s" : ""} · clique pour ouvrir`;
@@ -1184,12 +1353,34 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     renderHubContent();
   }
 
+  // Rendu global
+  function render() {
+    renderTabs();
+    renderHub();
+  }
+
   // === Actions ===
   const go = () => {
     const v = input.value.trim();
     if (!v) return;
     if (!isValid(v)) { toast("Lien invalide"); return; }
-    openUrl(v);
+    const full = normalizeUrl(v);
+    const fav = favs.find((f) => sameSite(f.url, full));
+    const name = fav ? fav.name : guessName(getDomain(full));
+    const cur = getActiveTab();
+    if (cur && cur.type === "site") {
+      cur.url = full;
+      cur.name = name;
+      current = full;
+      setLoading(true);
+      frame.src = full;
+      titleMain.textContent = name;
+      titleSub.textContent = full;
+      renderTabs();
+      updateStar();
+    } else {
+      openUrl(full);
+    }
   };
   btnGo.onclick = go;
   ["keydown", "keyup", "keypress"].forEach((t) =>
@@ -1208,6 +1399,7 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     if (current && favs.some((f) => sameSite(f.url, current))) { toast("Déjà dans ton hub"); return; }
     addFromInput();
   };
+  btnReq.onclick = () => askSuggest();
 
   btnShield.onclick = () => {
     adblock = !adblock;
@@ -1382,8 +1574,8 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   });
 
   // === Raccourcis clavier (Alt + ...) — actifs quand le focus n'est pas dans le jeu ===
-  // Alt+S ajouter/retirer le site actuel · Alt+1..9 ouvrir un favori · Alt+H hub
-  // Alt+R recharger · Alt+Z page entière · Alt+A anti-pub · Alt+M réduire/rouvrir
+  // Alt+T nouvel onglet · Alt+W fermer l'onglet · Alt+1..9 basculer onglet/favori · Alt+H hub
+  // Alt+S ajouter/retirer favori · Alt+R recharger · Alt+Z page entière · Alt+A anti-pub · Alt+M réduire/rouvrir
   document.addEventListener("keydown", (e) => {
     if (!host.isConnected || !e.altKey || e.ctrlKey || e.metaKey) return;
     const code = e.code;
@@ -1391,6 +1583,8 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     let handled = true;
     if (code === "KeyM") { hidden ? bubble.click() : btnMin.click(); }
     else if (hidden) handled = false;
+    else if (code === "KeyT") { createTab({ type: "hub", name: "Hub", url: "" }, true); }
+    else if (code === "KeyW") { closeTab(activeTabId); }
     else if (code === "KeyH") showHub();
     else if (code === "KeyR") btnReload.click();
     else if (code === "KeyZ") { win.classList.contains("full") ? setFull(false) : btnFull.click(); }
@@ -1404,8 +1598,13 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
       }
     }
     else if (/^Digit[1-9]$/.test(code)) {
-      const f = favs[Number(code.slice(5)) - 1];
-      if (f) openUrl(f.url); else toast("Pas de favori n°" + code.slice(5));
+      const idx = Number(code.slice(5)) - 1;
+      if (idx < openTabs.length) {
+        switchTab(openTabs[idx].id);
+      } else {
+        const f = favs[idx];
+        if (f) openUrl(f.url); else toast("Pas d'onglet ou favori n°" + code.slice(5));
+      }
     }
     else handled = false;
     if (handled) { e.preventDefault(); e.stopPropagation(); }
