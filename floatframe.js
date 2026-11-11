@@ -264,18 +264,18 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   background:linear-gradient(135deg,transparent 52%,rgba(255,255,255,.35) 52%,rgba(255,255,255,.35) 58%,transparent 58%,transparent 70%,rgba(255,255,255,.35) 70%,rgba(255,255,255,.35) 76%,transparent 76%)}
 .win.max .grip{display:none}
 
-.modal{position:absolute;inset:0;display:none;place-items:center;background:rgba(6,7,12,.6);
-  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:40}
-.modal.on{display:grid;animation:fade .18s}
-.mcard{width:min(340px,86%);padding:20px;border-radius:16px;background:#171a27;border:1px solid var(--line);
-  box-shadow:0 24px 60px rgba(0,0,0,.6);animation:pop .22s cubic-bezier(.2,.9,.3,1.2)}
-.mcard h3{margin:0 0 6px;font-size:15px}
-.mcard p{margin:0 0 12px;color:var(--mut);font-size:12px;word-break:break-all}
-.m-in{width:100%;height:38px;padding:0 12px;border-radius:10px;background:rgba(0,0,0,.35);border:1px solid var(--line);
-  color:var(--txt);font-size:13px;outline:0;margin-bottom:14px}
+.modal{position:absolute;inset:0;display:none;align-items:flex-start;justify-content:center;padding:12px 10px;background:rgba(6,7,12,.75);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:40;overflow-y:auto;scrollbar-width:thin}
+.modal.on{display:flex;animation:fade .18s}
+.mcard{width:min(420px,94%);max-height:calc(100% - 10px);margin:auto;display:flex;flex-direction:column;padding:16px 18px;border-radius:16px;background:#171a27;border:1px solid var(--line);
+  box-shadow:0 24px 60px rgba(0,0,0,.7);animation:pop .22s cubic-bezier(.2,.9,.3,1.2);overflow-y:auto;scrollbar-width:thin}
+.mcard h3{margin:0 0 4px;font-size:15px;flex-shrink:0}
+.mcard p{margin:0 0 10px;color:var(--mut);font-size:12px;word-break:normal;overflow-wrap:break-word;line-height:1.35;flex-shrink:0}
+.m-in{width:100%;height:34px;padding:0 10px;border-radius:9px;background:rgba(0,0,0,.35);border:1px solid var(--line);
+  color:var(--txt);font-size:12.5px;outline:0;margin-bottom:8px;flex-shrink:0}
 .m-in:focus{border-color:rgba(124,92,255,.8);box-shadow:0 0 0 3px rgba(124,92,255,.22)}
-.mact{display:flex;justify-content:flex-end;gap:8px}
-.mbtn{padding:8px 14px;border-radius:10px;font-size:12.5px;color:var(--mut);background:rgba(255,255,255,.06);transition:.15s}
+.mact{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;flex-shrink:0;position:sticky;bottom:-2px;background:#171a27;padding:6px 0 2px}
+.mbtn{padding:7px 13px;border-radius:9px;font-size:12px;color:var(--mut);background:rgba(255,255,255,.06);transition:.15s}
 .mbtn:hover{color:#fff;background:rgba(255,255,255,.12)}
 .mbtn.main{color:#fff;font-weight:600;background:linear-gradient(135deg,var(--a1),var(--a2))}
 .mbtn.main:hover{filter:brightness(1.12)}
@@ -675,35 +675,63 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   }
 
   async function addFromInput() {
-    const raw = input.value.trim();
-    if (!raw) { toast("Colle d'abord un lien"); input.focus(); return; }
+    const raw = input.value.trim() || (current && !favs.some((f) => sameSite(f.url, current)) ? current : "");
+    if (!raw) { toast("Colle d'abord un lien en haut"); input.focus(); return; }
     if (!isValid(raw)) { toast("Lien invalide"); return; }
     const full = normalizeUrl(raw);
     if (favs.some((f) => sameSite(f.url, full))) { toast("Déjà dans ton hub"); return; }
-    const res = await askSite({
-      title: "Ajouter un site",
-      name: guessName(getDomain(full)),
-      url: full,
-      folder: selectedFolder !== "ALL" ? selectedFolder : "Favoris",
-      isEdit: false,
-    });
-    if (!res) return;
-    favs.push({ name: res.name, url: full, folder: res.folder });
+
+    const name = guessName(getDomain(full));
+    const folder = selectedFolder !== "ALL" ? selectedFolder : "Jeux";
+
+    // Ajout direct au hub sans demander
+    favs.push({ name, url: full, folder });
     persist();
-    toast(`${res.name} ajouté au hub ✓`);
     render();
     updateStar();
+    input.value = "";
+
+    // Envoi direct à Discord en tant qu'administrateur
+    try {
+      fetch(API_URL + "/api/suggest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name,
+          url: full,
+          folder,
+          author: "Admin 👑",
+          notes: "Ajouté directement depuis la barre d'adresse",
+        }),
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d && d.discordSent) {
+            toast(`⭐ ${name} ajouté & envoyé sur Discord (Admin) ✓`);
+          } else {
+            toast(`⭐ ${name} ajouté au hub ✓`);
+          }
+        })
+        .catch(() => {
+          toast(`⭐ ${name} ajouté au hub ✓`);
+        });
+    } catch {
+      toast(`⭐ ${name} ajouté au hub ✓`);
+    }
   }
 
-  // Modale pour proposer un site à l'administrateur
+  // Modale compacte et scrollable pour proposer un site à l'administrateur
   const askSuggest = () =>
     new Promise((resolve) => {
-      const nameInp = h("input", { class: "m-in", type: "text", spellcheck: "false", placeholder: "Nom du site / jeu (ex: Krunker)" });
-      const urlInp = h("input", { class: "m-in", type: "text", spellcheck: "false", placeholder: "URL (ex: https://krunker.io)" });
+      const urlVal = input.value.trim() && isValid(input.value.trim()) ? normalizeUrl(input.value.trim()) : "";
+      const nameVal = urlVal ? guessName(getDomain(urlVal)) : "";
+
+      const nameInp = h("input", { class: "m-in", type: "text", value: nameVal, spellcheck: "false", placeholder: "Nom du site / jeu (ex: Krunker)" });
+      const urlInp = h("input", { class: "m-in", type: "text", value: urlVal, spellcheck: "false", placeholder: "URL (ex: https://krunker.io)" });
       const folderInp = h("input", { class: "m-in", type: "text", value: selectedFolder !== "ALL" ? selectedFolder : "Jeux", spellcheck: "false", placeholder: "Dossier suggéré" });
       const authorInp = h("input", { class: "m-in", type: "text", spellcheck: "false", placeholder: "Ton pseudo ou Discord (optionnel)" });
       const notesInp = h("input", { class: "m-in", type: "text", spellcheck: "false", placeholder: "Note / commentaire pour l'admin (optionnel)" });
-      const statusText = h("div", { style: "color:#ff5d73;font-size:12px;margin-bottom:10px;display:none" });
+      const statusText = h("div", { style: "color:#ff5d73;font-size:11.5px;margin-bottom:8px;display:none" });
 
       const done = () => {
         modal.classList.remove("on");
@@ -762,12 +790,12 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
 
       const existingFolders = getFolderList();
       const folderPills = existingFolders.length > 0
-        ? h("div", { style: "display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px" },
+        ? h("div", { style: "display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px" },
             ...existingFolders.map((fName) =>
               h("button", {
                 class: "ghost",
                 type: "button",
-                style: "padding:3px 8px;font-size:11px",
+                style: "padding:2px 7px;font-size:10.5px",
                 text: `${folderEmoji(fName)} ${fName}`,
                 onclick: () => { folderInp.value = fName; },
               })
@@ -775,19 +803,19 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
           )
         : null;
 
-      const card = h("div", { class: "mcard", style: "max-width:380px" },
+      const card = h("div", { class: "mcard", style: "max-width:390px;width:94%" },
         h("h3", { text: "💡 Proposer un site" }),
         h("p", { text: "Ta proposition sera envoyée directement sur Discord pour validation par l'administrateur." }),
-        h("label", { style: "display:block;font-size:11px;color:var(--mut);margin-bottom:3px", text: "Nom du site / jeu" }),
+        h("label", { style: "display:block;font-size:10.5px;color:var(--mut);margin-bottom:2px", text: "Nom du site / jeu" }),
         nameInp,
-        h("label", { style: "display:block;font-size:11px;color:var(--mut);margin-bottom:3px", text: "Lien (URL)" }),
+        h("label", { style: "display:block;font-size:10.5px;color:var(--mut);margin-bottom:2px", text: "Lien (URL)" }),
         urlInp,
-        h("label", { style: "display:block;font-size:11px;color:var(--mut);margin-bottom:3px", text: "Dossier / Fichier souhaité" }),
+        h("label", { style: "display:block;font-size:10.5px;color:var(--mut);margin-bottom:2px", text: "Dossier / Fichier souhaité" }),
         folderInp,
         folderPills,
-        h("label", { style: "display:block;font-size:11px;color:var(--mut);margin-bottom:3px", text: "Ton pseudo ou Discord (optionnel)" }),
+        h("label", { style: "display:block;font-size:10.5px;color:var(--mut);margin-bottom:2px", text: "Ton pseudo ou Discord (optionnel)" }),
         authorInp,
-        h("label", { style: "display:block;font-size:11px;color:var(--mut);margin-bottom:3px", text: "Commentaire / note (optionnel)" }),
+        h("label", { style: "display:block;font-size:10.5px;color:var(--mut);margin-bottom:2px", text: "Commentaire / note (optionnel)" }),
         notesInp,
         statusText,
         h("div", { class: "mact" }, cancel, okBtn)
@@ -801,7 +829,7 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
 
       modal.replaceChildren(card);
       modal.classList.add("on");
-      nameInp.focus();
+      (nameVal ? urlInp : nameInp).focus();
     });
 
   // Éléments du Hub
