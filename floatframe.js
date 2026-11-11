@@ -19,7 +19,7 @@
     if (!/^https?:\/\//i.test(u)) u = "https://" + u;
     return u;
   };
-  const getDomain = (u) => u.replace(/^https?:\/\/(www\.)?/, "").split(/[/?#]/)[0];
+  const getDomain = (u) => (u || "").replace(/^https?:\/\/(www\.)?/, "").split(/[/?#]/)[0].toLowerCase();
   const isValid = (s) => {
     try {
       const u = new URL(normalizeUrl(s));
@@ -827,6 +827,13 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
 
   // Envoi direct d'une requête de favori vers Discord
   async function sendSiteRequest(site) {
+    if (!site || !site.url) return;
+    const existing = favs.find((f) => sameSite(f.url, site.url));
+    if (existing) {
+      toast(`⚠️ "${existing.name}" est déjà ajouté dans tes favoris !`);
+      return;
+    }
+
     toast(`Envoi de "${site.name}" sur Discord...`);
     try {
       const r = await fetch(API_URL + "/api/suggest", {
@@ -868,7 +875,7 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
       const folderInp = h("input", { class: "m-in", type: "text", value: targetFolder, spellcheck: "false", placeholder: "Dossier souhaité" });
       const authorInp = h("input", { class: "m-in", type: "text", spellcheck: "false", placeholder: "Ton pseudo ou Discord (optionnel)" });
       const notesInp = h("input", { class: "m-in", type: "text", spellcheck: "false", placeholder: "Note / commentaire pour l'admin (optionnel)" });
-      const statusText = h("div", { style: "color:#ff5d73;font-size:11.5px;margin-bottom:8px;display:none" });
+      const statusText = h("div", { style: "color:#ff5d73;font-size:11.5px;margin-bottom:8px;display:none;font-weight:600" });
 
       const done = () => {
         modal.classList.remove("on");
@@ -895,6 +902,17 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
             return;
           }
           url = normalizeUrl(url);
+
+          // SÉCURITÉ ANTI-DOUBLON : si le site est déjà dans les favoris, ne pas envoyer
+          const already = favs.find((f) => sameSite(f.url, url));
+          if (already) {
+            statusText.textContent = `⚠️ Ce site est déjà ajouté dans ton Hub ("${already.name}") !`;
+            statusText.style.display = "block";
+            okBtn.disabled = true;
+            okBtn.textContent = "Déjà ajouté au Hub";
+            toast(`"${already.name}" est déjà dans tes favoris !`);
+            return;
+          }
 
           okBtn.disabled = true;
           okBtn.textContent = "Envoi en cours...";
@@ -924,6 +942,37 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
           }
         },
       });
+
+      // Vérification dynamique en temps réel si l'URL est déjà dans les favoris
+      const checkDuplicate = (rawUrl) => {
+        if (!rawUrl || !isValid(rawUrl)) {
+          statusText.style.display = "none";
+          okBtn.disabled = false;
+          okBtn.textContent = "Envoyer à l'admin";
+          return null;
+        }
+        const full = normalizeUrl(rawUrl);
+        const existing = favs.find((f) => sameSite(f.url, full));
+        if (existing) {
+          statusText.textContent = `⚠️ Ce site est déjà ajouté dans ton Hub ("${existing.name}") !`;
+          statusText.style.display = "block";
+          okBtn.disabled = true;
+          okBtn.textContent = "Déjà ajouté au Hub";
+          return existing;
+        } else {
+          statusText.style.display = "none";
+          okBtn.disabled = false;
+          okBtn.textContent = "Envoyer à l'admin";
+          return null;
+        }
+      };
+
+      urlInp.addEventListener("input", () => {
+        checkDuplicate(urlInp.value.trim());
+      });
+
+      // Exécution immédiate au cas où le lien pré-rempli est déjà présent
+      checkDuplicate(targetUrl);
 
       const existingFolders = getFolderList();
       const folderPills = existingFolders.length > 0
@@ -960,13 +1009,16 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
 
       card.addEventListener("keydown", (e) => {
         e.stopPropagation();
-        if (e.key === "Enter" && e.target.tagName === "INPUT") okBtn.click();
+        if (e.key === "Enter" && e.target.tagName === "INPUT") {
+          if (!okBtn.disabled) okBtn.click();
+          else toast("Ce site est déjà ajouté dans tes favoris !");
+        }
         if (e.key === "Escape") done();
       });
 
       modal.replaceChildren(card);
       modal.classList.add("on");
-      (nameVal ? urlInp : nameInp).focus();
+      (targetName ? urlInp : nameInp).focus();
     });
 
   // Éléments du Hub
@@ -1399,7 +1451,18 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     if (current && favs.some((f) => sameSite(f.url, current))) { toast("Déjà dans ton hub"); return; }
     addFromInput();
   };
-  btnReq.onclick = () => askSuggest();
+  btnReq.onclick = () => {
+    const curTab = getActiveTab();
+    const candidateUrl = (curTab && curTab.type === "site" && curTab.url) ? curTab.url : (input.value.trim() || current || "");
+    if (candidateUrl && isValid(candidateUrl)) {
+      const existing = favs.find((f) => sameSite(f.url, normalizeUrl(candidateUrl)));
+      if (existing) {
+        toast(`⚠️ "${existing.name}" est déjà dans tes favoris !`);
+        return;
+      }
+    }
+    askSuggest();
+  };
 
   btnShield.onclick = () => {
     adblock = !adblock;

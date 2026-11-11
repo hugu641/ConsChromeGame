@@ -795,9 +795,10 @@ async function suggestSite(req, db, env) {
   }
 
   // Vérifier si le site a déjà été proposé
+  const urlAlt = url.endsWith("/") ? url.slice(0, -1) : url + "/";
   const existing = await db.prepare(
-    "SELECT id, status FROM site_suggestions WHERE url = ? AND status != 'rejected' LIMIT 1"
-  ).bind(url).first();
+    "SELECT id, status FROM site_suggestions WHERE (url = ? OR url = ?) AND status != 'rejected' LIMIT 1"
+  ).bind(url, urlAlt).first();
   if (existing) {
     if (existing.status === "approved") {
       throw new HttpError(400, "Ce site est déjà validé et accepté dans FloatFrame !");
