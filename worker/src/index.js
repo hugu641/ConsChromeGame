@@ -814,6 +814,9 @@ async function suggestSite(req, db, env) {
   const id = ins.meta?.last_row_id || ins.lastRowId || (await db.prepare("SELECT last_insert_rowid() AS id").first())?.id;
 
   // Envoi sécurisé via Webhook Discord (depuis le serveur Cloudflare, invisible pour le client)
+  let discordSent = false;
+  let discordError = null;
+
   if (env.DISCORD_WEBHOOK_URL) {
     const workerOrigin = new URL(req.url).origin;
     const approveUrl = `${workerOrigin}/api/suggest/action?id=${id}&token=${actionToken}&action=approve`;
@@ -821,7 +824,6 @@ async function suggestSite(req, db, env) {
 
     const discordPayload = {
       username: "FloatFrame · Modération",
-      avatar_url: "https://raw.githubusercontent.com/hugu641/ConsChromeGame/main/favicon.ico",
       embeds: [
         {
           title: "💡 Nouvelle proposition de site !",
@@ -846,20 +848,39 @@ async function suggestSite(req, db, env) {
     };
 
     try {
-      await fetch(env.DISCORD_WEBHOOK_URL, {
+      const dRes = await fetch(env.DISCORD_WEBHOOK_URL, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "user-agent": "FloatFrame-Cloudflare-Worker/1.0",
+        },
         body: JSON.stringify(discordPayload),
       });
+      if (dRes.ok) {
+        discordSent = true;
+      } else {
+        discordError = `Discord a répondu HTTP ${dRes.status}: ` + (await dRes.text());
+        console.error("Erreur webhook Discord:", discordError);
+      }
     } catch (e) {
+      discordError = e.message || String(e);
       console.error("Erreur envoi webhook Discord:", e);
     }
+  } else {
+    console.warn("DISCORD_WEBHOOK_URL n'est pas configuré dans Cloudflare.");
   }
 
   return json({
     ok: true,
     id,
-    message: "Demande envoyée avec succès ! L'administrateur a été notifié sur Discord.",
+    discordSent,
+    discordConfigured: !!env.DISCORD_WEBHOOK_URL,
+    errorDetail: discordError,
+    message: discordSent
+      ? "Demande envoyée avec succès ! L'administrateur a été notifié sur Discord."
+      : !env.DISCORD_WEBHOOK_URL
+      ? "Demande enregistrée en base ! Attention : la variable DISCORD_WEBHOOK_URL n'a pas encore été configurée dans Cloudflare."
+      : "Demande enregistrée en base, mais Discord a retourné une erreur lors de l'envoi.",
   });
 }
 

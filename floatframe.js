@@ -743,7 +743,13 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
             });
             const data = await r.json().catch(() => ({}));
             if (!r.ok) throw new Error(data.error || "Erreur HTTP " + r.status);
-            toast("Demande transmise à l'administrateur Discord ✓");
+            if (!data.discordConfigured) {
+              toast("⚠️ Enregistré en base, mais DISCORD_WEBHOOK_URL non configuré");
+            } else if (!data.discordSent) {
+              toast("⚠️ Enregistré en base, mais Discord a échoué");
+            } else {
+              toast("Demande reçue sur Discord ✓");
+            }
             done();
           } catch (err) {
             statusText.textContent = err.message || "Erreur de connexion au serveur.";
