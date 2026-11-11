@@ -51,3 +51,18 @@ CREATE TABLE IF NOT EXISTS login_fails (
   lock_until INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (ip, name_lower)
 );
+
+CREATE TABLE IF NOT EXISTS site_suggestions (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  name         TEXT    NOT NULL,
+  url          TEXT    NOT NULL,
+  folder       TEXT    NOT NULL,
+  author       TEXT,
+  notes        TEXT,
+  status       TEXT    NOT NULL DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
+  action_token TEXT    NOT NULL UNIQUE,
+  ip           TEXT    NOT NULL,
+  created      INTEGER NOT NULL,
+  reviewed_at  INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_suggestions_status ON site_suggestions (status);

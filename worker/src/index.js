@@ -39,6 +39,16 @@ const json = (data, status = 200) =>
     },
   });
 
+const html = (body, status = 200) =>
+  new Response(body, {
+    status,
+    headers: {
+      ...CORS,
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+
 // ---------- Crypto ----------
 const enc = new TextEncoder();
 const toHex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -102,6 +112,20 @@ async function ensureTables(db) {
         lock_until INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (ip, name_lower)
       )`),
+      db.prepare(`CREATE TABLE IF NOT EXISTS site_suggestions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        folder TEXT NOT NULL,
+        author TEXT,
+        notes TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        action_token TEXT NOT NULL UNIQUE,
+        ip TEXT NOT NULL,
+        created INTEGER NOT NULL,
+        reviewed_at INTEGER
+      )`),
+      db.prepare(`CREATE INDEX IF NOT EXISTS idx_suggestions_status ON site_suggestions (status)`),
     ]);
     tablesInit = true;
   } catch (e) {
@@ -732,6 +756,289 @@ async function daily(db, user) {
   return json({ balance: row.balance, bonus: DAILY_BONUS, nextDaily: row.last_daily + DAILY_MS });
 }
 
+// ---------- Système de suggestions de sites (Discord Webhook & Actions) ----------
+const MAX_SUGGEST_PER_HOUR = 5;
+
+async function suggestSite(req, db, env) {
+  const ip = req.headers.get("cf-connecting-ip") || "0.0.0.0";
+  const now = Date.now();
+  const oneHourAgo = now - 3600 * 1000;
+
+  // Rate-limiting par IP (max 5 suggestions par heure)
+  const { results: recent } = await db.prepare(
+    "SELECT count(*) as cnt FROM site_suggestions WHERE ip = ? AND created > ?"
+  ).bind(ip, oneHourAgo).all();
+  if (recent && recent[0] && recent[0].cnt >= MAX_SUGGEST_PER_HOUR) {
+    throw new HttpError(429, "Trop de suggestions envoyées récemment. Réessaie dans une heure.");
+  }
+
+  const body = await req.json().catch(() => null);
+  if (!body) throw new HttpError(400, "Corps de requête invalide.");
+
+  const name = (body.name || "").trim();
+  let url = (body.url || "").trim();
+  const folder = (body.folder || "Jeux").trim();
+  const author = (body.author || "").trim().slice(0, 40);
+  const notes = (body.notes || "").trim().slice(0, 400);
+
+  if (!name || name.length > 60) throw new HttpError(400, "Le nom du site doit contenir entre 1 et 60 caractères.");
+  if (!url) throw new HttpError(400, "L'URL est requise.");
+  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+
+  try {
+    const parsed = new URL(url);
+    if (!/\.[a-z]{2,}$/i.test(parsed.hostname) && parsed.hostname !== "localhost") {
+      throw new Error();
+    }
+  } catch {
+    throw new HttpError(400, "L'URL fournie est invalide.");
+  }
+
+  // Vérifier si le site a déjà été proposé
+  const existing = await db.prepare(
+    "SELECT id, status FROM site_suggestions WHERE url = ? AND status != 'rejected' LIMIT 1"
+  ).bind(url).first();
+  if (existing) {
+    if (existing.status === "approved") {
+      throw new HttpError(400, "Ce site est déjà validé et accepté dans FloatFrame !");
+    }
+    throw new HttpError(400, "Ce site a déjà été proposé et est en cours d'examen par l'administrateur.");
+  }
+
+  const actionToken = randomHex(24);
+
+  const ins = await db.prepare(
+    "INSERT INTO site_suggestions (name, url, folder, author, notes, status, action_token, ip, created) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)"
+  ).bind(name, url, folder, author || null, notes || null, actionToken, ip, now).run();
+
+  const id = ins.meta?.last_row_id || ins.lastRowId || (await db.prepare("SELECT last_insert_rowid() AS id").first())?.id;
+
+  // Envoi sécurisé via Webhook Discord (depuis le serveur Cloudflare, invisible pour le client)
+  if (env.DISCORD_WEBHOOK_URL) {
+    const workerOrigin = new URL(req.url).origin;
+    const approveUrl = `${workerOrigin}/api/suggest/action?id=${id}&token=${actionToken}&action=approve`;
+    const rejectUrl = `${workerOrigin}/api/suggest/action?id=${id}&token=${actionToken}&action=reject`;
+
+    const discordPayload = {
+      username: "FloatFrame · Modération",
+      avatar_url: "https://raw.githubusercontent.com/hugu641/ConsChromeGame/main/favicon.ico",
+      embeds: [
+        {
+          title: "💡 Nouvelle proposition de site !",
+          color: 0x7c5cff,
+          description: "Un utilisateur a demandé l'ajout d'un nouveau site dans le hub FloatFrame.",
+          fields: [
+            { name: "🎮 Nom du site", value: `**${name}**`, inline: true },
+            { name: "📁 Dossier suggéré", value: folder, inline: true },
+            { name: "👤 Proposé par", value: author ? `\`${author}\`` : "*Anonyme*", inline: true },
+            { name: "🔗 URL", value: url, inline: false },
+            { name: "📝 Commentaire / Raison", value: notes ? `> ${notes}` : "*Aucun*", inline: false },
+            {
+              name: "⚡ Décision Administrateur",
+              value: `👉 **[✅ ACCEPTER CE SITE](${approveUrl})**\n👉 **[❌ REFUSER LA DEMANDE](${rejectUrl})**`,
+              inline: false,
+            },
+          ],
+          footer: { text: `Demande #${id} · FloatFrame Cloudflare Bot` },
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    };
+
+    try {
+      await fetch(env.DISCORD_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(discordPayload),
+      });
+    } catch (e) {
+      console.error("Erreur envoi webhook Discord:", e);
+    }
+  }
+
+  return json({
+    ok: true,
+    id,
+    message: "Demande envoyée avec succès ! L'administrateur a été notifié sur Discord.",
+  });
+}
+
+async function actionSuggest(req, db, env) {
+  const { searchParams } = new URL(req.url);
+  const id = Number(searchParams.get("id"));
+  const token = searchParams.get("token") || "";
+  const action = (searchParams.get("action") || "").toLowerCase();
+
+  if (!id || !token || (action !== "approve" && action !== "reject")) {
+    return html(`
+      <!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Erreur</title>
+      <style>body{background:#0f111a;color:#fff;font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0}
+      .c{background:#171a27;padding:30px;border-radius:14px;border:1px solid rgba(255,255,255,.1);text-align:center}</style></head>
+      <body><div class="c"><h2>Paramètres invalides</h2><p>Le lien d'action est incomplet ou erroné.</p></div></body></html>
+    `, 400);
+  }
+
+  const item = await db.prepare(
+    "SELECT * FROM site_suggestions WHERE id = ? AND action_token = ?"
+  ).bind(id, token).first();
+
+  if (!item) {
+    return html(`
+      <!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Introuvable</title>
+      <style>body{background:#0f111a;color:#fff;font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0}
+      .c{background:#171a27;padding:30px;border-radius:14px;border:1px solid rgba(255,255,255,.1);text-align:center}</style></head>
+      <body><div class="c"><h2>Demande introuvable</h2><p>Cette suggestion n'existe pas ou le token de sécurité est invalide.</p></div></body></html>
+    `, 404);
+  }
+
+  if (item.status !== "pending") {
+    const statusFr = item.status === "approved" ? "acceptée" : "refusée";
+    return html(`
+      <!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Déjà traitée</title>
+      <style>body{background:#0f111a;color:#fff;font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0}
+      .c{background:#171a27;padding:30px;border-radius:14px;border:1px solid rgba(255,255,255,.1);text-align:center;max-width:400px}</style></head>
+      <body><div class="c"><h2>Déjà traitée</h2><p>Cette demande pour <b>${item.name}</b> a déjà été <b>${statusFr}</b>.</p></div></body></html>
+    `, 200);
+  }
+
+  const now = Date.now();
+
+  if (action === "approve") {
+    await db.prepare(
+      "UPDATE site_suggestions SET status = 'approved', reviewed_at = ? WHERE id = ?"
+    ).bind(now, id).run();
+
+    // Notifier Discord
+    if (env.DISCORD_WEBHOOK_URL) {
+      try {
+        await fetch(env.DISCORD_WEBHOOK_URL, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            username: "FloatFrame · Modération",
+            embeds: [
+              {
+                title: "✅ Site accepté et validé !",
+                color: 0x3ddc97,
+                description: `La proposition pour **${item.name}** a été acceptée par l'administrateur.`,
+                fields: [
+                  { name: "📁 Dossier", value: item.folder, inline: true },
+                  { name: "🔗 URL", value: item.url, inline: true },
+                  { name: "👤 Proposé par", value: item.author || "*Anonyme*", inline: true },
+                ],
+                footer: { text: `Demande #${item.id} approuvée` },
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          }),
+        });
+      } catch (e) {
+        console.error("Erreur notification Discord:", e);
+      }
+    }
+
+    const jsonSnippet = JSON.stringify({ name: item.name, url: item.url, folder: item.folder }, null, 2);
+
+    return html(`
+      <!DOCTYPE html>
+      <html lang="fr">
+      <head>
+        <meta charset="utf-8">
+        <title>Site validé ! - FloatFrame</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body{font-family:Inter,system-ui,-apple-system,sans-serif;background:#0f111a;color:#eef0f8;display:grid;place-items:center;min-height:100vh;margin:0;padding:20px;box-sizing:border-box}
+          .card{background:#171a27;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:28px;max-width:480px;width:100%;box-shadow:0 30px 70px rgba(0,0,0,.6);text-align:center}
+          .badge{display:inline-block;background:rgba(61,220,151,.15);color:#3ddc97;border:1px solid rgba(61,220,151,.4);padding:5px 14px;border-radius:999px;font-weight:600;font-size:12.5px;margin-bottom:16px}
+          h1{margin:0 0 8px;font-size:22px;letter-spacing:-.3px}
+          p{color:#8b90a8;font-size:13.5px;margin:0 0 20px;line-height:1.5}
+          .info{background:rgba(0,0,0,.35);border-radius:12px;padding:14px 16px;text-align:left;margin-bottom:18px;font-size:13px;border:1px solid rgba(255,255,255,.05)}
+          .info div{margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+          .info b{color:#fff}
+          .json-box{background:#090a10;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;font-family:monospace;font-size:12px;text-align:left;white-space:pre-wrap;word-break:break-all;color:#b9a8ff;margin-bottom:16px}
+          .btn{background:linear-gradient(135deg,#7c5cff,#00d4ff);color:#fff;border:0;padding:11px 22px;border-radius:10px;font-weight:650;font-size:13px;cursor:pointer;transition:.15s}
+          .btn:hover{filter:brightness(1.15);transform:scale(1.02)}
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="badge">✓ Site approuvé avec succès</div>
+          <h1>${item.name}</h1>
+          <p>Le site a été validé et enregistré dans la base de données FloatFrame.</p>
+          <div class="info">
+            <div><b>📁 Dossier :</b> ${item.folder}</div>
+            <div><b>🔗 Lien :</b> <a href="${item.url}" target="_blank" style="color:#00d4ff">${item.url}</a></div>
+            ${item.author ? `<div><b>👤 Proposé par :</b> ${item.author}</div>` : ""}
+          </div>
+          <div class="json-box" id="jsonSnippet">${jsonSnippet}</div>
+          <button class="btn" onclick="navigator.clipboard.writeText(document.getElementById('jsonSnippet').textContent); alert('Snippet JSON copié !');">📋 Copier le snippet JSON</button>
+        </div>
+      </body>
+      </html>
+    `, 200);
+  }
+
+  // Refus
+  await db.prepare(
+    "UPDATE site_suggestions SET status = 'rejected', reviewed_at = ? WHERE id = ?"
+  ).bind(now, id).run();
+
+  if (env.DISCORD_WEBHOOK_URL) {
+    try {
+      await fetch(env.DISCORD_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          username: "FloatFrame · Modération",
+          embeds: [
+            {
+              title: "❌ Demande de site refusée",
+              color: 0xff4d63,
+              description: `La proposition pour **${item.name}** a été refusée par l'administrateur.`,
+              footer: { text: `Demande #${item.id} refusée` },
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        }),
+      });
+    } catch (e) {
+      console.error("Erreur notification Discord:", e);
+    }
+  }
+
+  return html(`
+    <!DOCTYPE html>
+    <html lang="fr">
+    <head>
+      <meta charset="utf-8">
+      <title>Demande Refusée - FloatFrame</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+        body{font-family:Inter,system-ui,-apple-system,sans-serif;background:#0f111a;color:#eef0f8;display:grid;place-items:center;min-height:100vh;margin:0;padding:20px;box-sizing:border-box}
+        .card{background:#171a27;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:28px;max-width:420px;width:100%;box-shadow:0 30px 70px rgba(0,0,0,.6);text-align:center}
+        .badge{display:inline-block;background:rgba(255,77,99,.15);color:#ff4d63;border:1px solid rgba(255,77,99,.4);padding:5px 14px;border-radius:999px;font-weight:600;font-size:12.5px;margin-bottom:16px}
+        h1{margin:0 0 8px;font-size:22px}
+        p{color:#8b90a8;font-size:13.5px;margin:0;line-height:1.5}
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="badge">✕ Demande rejetée</div>
+        <h1>${item.name}</h1>
+        <p>Cette proposition a été refusée et ne sera pas ajoutée au hub.</p>
+      </div>
+    </body>
+    </html>
+  `, 200);
+}
+
+async function listApprovedSites(db) {
+  const { results } = await db.prepare(
+    "SELECT id, name, url, folder, created FROM site_suggestions WHERE status = 'approved' ORDER BY id ASC"
+  ).all();
+  return json({ approved: results || [] });
+}
+
 // ---------- Dispatcher HTTP ----------
 export default {
   async fetch(req, env) {
@@ -747,6 +1054,11 @@ export default {
       }
       if (req.method === "POST" && pathname === "/api/register") return await register(req, db);
       if (req.method === "POST" && pathname === "/api/login") return await login(req, db);
+
+      // Suggestions de sites & modération Discord
+      if (req.method === "POST" && pathname === "/api/suggest") return await suggestSite(req, db, env);
+      if (req.method === "GET" && pathname === "/api/suggest/action") return await actionSuggest(req, db, env);
+      if (req.method === "GET" && pathname === "/api/suggest/approved") return await listApprovedSites(db);
 
       // Routes protégées par authentification
       const isAuthRoute =

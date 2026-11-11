@@ -2,6 +2,7 @@
   const STORAGE_KEY = "__floatFrameFavorites";
   const SITES_URL = "https://raw.githubusercontent.com/hugu641/ConsChromeGame/refs/heads/main/sites.json";
   const CASINO_URL = "https://raw.githubusercontent.com/hugu641/ConsChromeGame/refs/heads/main/casino.js";
+  const API_URL = "https://floatframe-casino.hug6314.workers.dev";
   const REMOTE_KEY = "__floatFrameRemote"; // domaines venant de sites.json
   const REFRESH_MS = 2 * 60 * 1000; // mise à jour du JSON toutes les 2 min
   const ADBLOCK_KEY = "__floatFrameAdblock";
@@ -68,6 +69,7 @@
     search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35",
     folder: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z",
     edit: "M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z",
+    bulb: "M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.6 1.4 4.8 3.5 6h7c2.1-1.2 3.5-3.4 3.5-6a7 7 0 0 0-7-7z",
   };
   const NS = "http://www.w3.org/2000/svg";
   const ico = (d, size = 16) => {
@@ -695,10 +697,114 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     updateStar();
   }
 
+  // Modale pour proposer un site à l'administrateur
+  const askSuggest = () =>
+    new Promise((resolve) => {
+      const nameInp = h("input", { class: "m-in", type: "text", spellcheck: "false", placeholder: "Nom du site / jeu (ex: Krunker)" });
+      const urlInp = h("input", { class: "m-in", type: "text", spellcheck: "false", placeholder: "URL (ex: https://krunker.io)" });
+      const folderInp = h("input", { class: "m-in", type: "text", value: selectedFolder !== "ALL" ? selectedFolder : "Jeux", spellcheck: "false", placeholder: "Dossier suggéré" });
+      const authorInp = h("input", { class: "m-in", type: "text", spellcheck: "false", placeholder: "Ton pseudo ou Discord (optionnel)" });
+      const notesInp = h("input", { class: "m-in", type: "text", spellcheck: "false", placeholder: "Note / commentaire pour l'admin (optionnel)" });
+      const statusText = h("div", { style: "color:#ff5d73;font-size:12px;margin-bottom:10px;display:none" });
+
+      const done = () => {
+        modal.classList.remove("on");
+        modal.replaceChildren();
+        resolve();
+      };
+
+      const cancel = h("button", { class: "mbtn", text: "Annuler", onclick: done });
+      const okBtn = h("button", {
+        class: "mbtn main", text: "Envoyer à l'admin",
+        onclick: async () => {
+          const name = nameInp.value.trim();
+          let url = urlInp.value.trim();
+          const folder = folderInp.value.trim() || "Jeux";
+          const author = authorInp.value.trim();
+          const notes = notesInp.value.trim();
+
+          if (!name) { nameInp.focus(); return; }
+          if (!url) { urlInp.focus(); return; }
+          if (!isValid(url)) {
+            statusText.textContent = "Lien invalide (ex: monsite.com ou https://...)";
+            statusText.style.display = "block";
+            urlInp.focus();
+            return;
+          }
+          url = normalizeUrl(url);
+
+          okBtn.disabled = true;
+          okBtn.textContent = "Envoi en cours...";
+          statusText.style.display = "none";
+
+          try {
+            const r = await fetch(API_URL + "/api/suggest", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ name, url, folder, author, notes }),
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(data.error || "Erreur HTTP " + r.status);
+            toast("Demande transmise à l'administrateur Discord ✓");
+            done();
+          } catch (err) {
+            statusText.textContent = err.message || "Erreur de connexion au serveur.";
+            statusText.style.display = "block";
+            okBtn.disabled = false;
+            okBtn.textContent = "Envoyer à l'admin";
+          }
+        },
+      });
+
+      const existingFolders = getFolderList();
+      const folderPills = existingFolders.length > 0
+        ? h("div", { style: "display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px" },
+            ...existingFolders.map((fName) =>
+              h("button", {
+                class: "ghost",
+                type: "button",
+                style: "padding:3px 8px;font-size:11px",
+                text: `${folderEmoji(fName)} ${fName}`,
+                onclick: () => { folderInp.value = fName; },
+              })
+            )
+          )
+        : null;
+
+      const card = h("div", { class: "mcard", style: "max-width:380px" },
+        h("h3", { text: "💡 Proposer un site" }),
+        h("p", { text: "Ta proposition sera envoyée directement sur Discord pour validation par l'administrateur." }),
+        h("label", { style: "display:block;font-size:11px;color:var(--mut);margin-bottom:3px", text: "Nom du site / jeu" }),
+        nameInp,
+        h("label", { style: "display:block;font-size:11px;color:var(--mut);margin-bottom:3px", text: "Lien (URL)" }),
+        urlInp,
+        h("label", { style: "display:block;font-size:11px;color:var(--mut);margin-bottom:3px", text: "Dossier / Fichier souhaité" }),
+        folderInp,
+        folderPills,
+        h("label", { style: "display:block;font-size:11px;color:var(--mut);margin-bottom:3px", text: "Ton pseudo ou Discord (optionnel)" }),
+        authorInp,
+        h("label", { style: "display:block;font-size:11px;color:var(--mut);margin-bottom:3px", text: "Commentaire / note (optionnel)" }),
+        notesInp,
+        statusText,
+        h("div", { class: "mact" }, cancel, okBtn)
+      );
+
+      card.addEventListener("keydown", (e) => {
+        e.stopPropagation();
+        if (e.key === "Enter" && e.target.tagName === "INPUT") okBtn.click();
+        if (e.key === "Escape") done();
+      });
+
+      modal.replaceChildren(card);
+      modal.classList.add("on");
+      nameInp.focus();
+    });
+
   // Éléments du Hub
   const hubSubtitle = h("p");
   const resetBtn = h("button", {
     class: "ghost",
+    title: "Réinitialiser les favoris",
     onclick: async () => {
       const yes = await ask({
         title: "Réinitialiser le hub ?",
@@ -717,9 +823,15 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     },
   }, ico(P.reset, 13), h("span", { text: "Réinitialiser" }));
 
+  const suggestBtn = h("button", {
+    class: "ghost",
+    title: "Proposer un nouveau site à l'administrateur (Discord)",
+    onclick: askSuggest,
+  }, ico(P.bulb, 13), h("span", { text: "Proposer un site" }));
+
   const hubHead = h("div", { class: "hub-head" },
     h("div", {}, h("h2", { text: "Ton hub" }), hubSubtitle),
-    resetBtn
+    h("div", { style: "display:flex;align-items:center;gap:6px" }, suggestBtn, resetBtn)
   );
 
   const searchInput = h("input", {
@@ -811,6 +923,19 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     tile.style.setProperty("--i", animIndex);
     tile.addEventListener("click", openCasino);
     tile.addEventListener("keydown", (e) => { if (e.key === "Enter") openCasino(); });
+    return tile;
+  };
+
+  const makeSuggestTile = (animIndex = 0) => {
+    const tile = h("div", { class: "card", role: "button", tabindex: "0" },
+      h("div", { class: "ico", style: "width:52px;height:52px;font-size:26px;display:grid;place-items:center;border-radius:16px;background:linear-gradient(135deg,#7c5cff,#00d4ff)", text: "💡" }),
+      h("div", { class: "nm", text: "Proposer un site" }),
+      h("div", { class: "dm", text: "Validation Discord" }),
+      h("div", { class: "folder-tag", text: "🤝 Communauté" })
+    );
+    tile.style.setProperty("--i", animIndex);
+    tile.addEventListener("click", askSuggest);
+    tile.addEventListener("keydown", (e) => { if (e.key === "Enter") askSuggest(); });
     return tile;
   };
 
@@ -962,15 +1087,16 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
       sections.push(h("div", { class: "folder-sec" }, secHead, grid));
     }
 
-    // Section Casino & Ajout
+    // Section Casino, Suggestions & Ajout
     const extraHead = h("div", { class: "folder-sec-head" },
       h("div", { class: "folder-sec-title" },
-        h("span", { text: "🎲 Jeux & Nouveaux Sites" }),
-        h("span", { class: "folder-sec-badge", text: "Bonus" })
+        h("span", { text: "🎲 Jeux, Suggestions & Nouveaux Sites" }),
+        h("span", { class: "folder-sec-badge", text: "Communauté" })
       )
     );
     const extraGrid = h("div", { class: "grid" },
       makeCasinoTile(animCount++),
+      makeSuggestTile(animCount++),
       makeAddTile("Favoris", animCount++)
     );
     sections.push(h("div", { class: "folder-sec" }, extraHead, extraGrid));
@@ -1150,6 +1276,21 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
   const syncRemote = async () => {
     const list = await fetchSites();
     if (!list) return;
+
+    // Récupérer également les sites validés par l'admin depuis le serveur
+    try {
+      const apprRes = await fetch(API_URL + "/api/suggest/approved?t=" + Date.now(), { cache: "no-store" });
+      if (apprRes.ok) {
+        const apprData = await apprRes.json();
+        if (Array.isArray(apprData?.approved)) {
+          for (const s of apprData.approved) {
+            if (s && s.name && s.url && !list.some((x) => sameSite(x.url, s.url))) {
+              list.push({ name: s.name, url: s.url, folder: s.folder || "Jeux" });
+            }
+          }
+        }
+      }
+    } catch {}
 
     let prev = [];
     try { prev = JSON.parse(localStorage.getItem(REMOTE_KEY)) || []; } catch {}

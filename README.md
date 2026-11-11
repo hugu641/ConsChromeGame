@@ -66,6 +66,23 @@ npx wrangler deploy                             # affiche l'URL du Worker
 
 Puis mets cette URL dans la constante `API` en haut de `casino.js` et pousse le fichier sur GitHub. Si le domaine `workers.dev` est bloqué sur ton réseau, attache un domaine perso au Worker depuis le tableau de bord Cloudflare.
 
+## 💡 Proposer un site & Modération Discord
+
+Les utilisateurs peuvent soumettre des propositions de sites ou jeux directement depuis le hub FloatFrame :
+- **Sécurité totale** : La requête part de FloatFrame vers le serveur Cloudflare. L'URL du webhook Discord n'est jamais exposée aux utilisateurs.
+- **Notification Discord automatique** : Un embed est envoyé avec le nom du site, le lien, le dossier suggéré et l'auteur.
+- **Validation en un clic** : L'administrateur peut cliquer directement sur **[✅ ACCEPTER CE SITE]** ou **[❌ REFUSER LA DEMANDE]** depuis Discord.
+
+### Configurer le Webhook Discord (Gratuit & 24/7) :
+
+```bash
+cd worker
+npx wrangler secret put DISCORD_WEBHOOK_URL  # Colle l'URL de ton Webhook Discord
+npx wrangler deploy
+```
+
+*(Un bot Discord optionnel avec de vrais boutons interactifs est également disponible dans le dossier `discord-bot/`).*
+
 ## Customization
 
 Edit the `DEFAULT_SITES` array at the top of `floatframe.js` to change the default sites. The **↺** button in the window resets the list to the defaults.
