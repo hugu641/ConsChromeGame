@@ -320,22 +320,21 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
     box.style.background = `linear-gradient(135deg,hsl(${hue} 75% 58%),hsl(${(hue + 40) % 360} 75% 45%))`;
     box.textContent = (fav.name[0] || "?").toUpperCase();
 
-    const sources = [
-      `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
-      `https://${domain}/favicon.ico`,
-    ];
-    let i = 0;
     const img = new Image();
     img.referrerPolicy = "no-referrer";
     img.draggable = false;
     img.onload = () => {
-      box.textContent = "";
-      box.style.background = "";
-      box.classList.add("has-img");
-      box.append(img);
+      if (img.naturalWidth > 1 && img.naturalHeight > 1) {
+        box.textContent = "";
+        box.style.background = "";
+        box.classList.add("has-img");
+        box.append(img);
+      }
     };
-    img.onerror = () => { if (++i < sources.length) img.src = sources[i]; };
-    img.src = sources[0];
+    img.onerror = () => {
+      // En cas d'indisponibilité, la lettre colorée stylisée reste affichée proprement
+    };
+    img.src = `https://icons.duckduckgo.com/ip3/${domain}.ico`;
     return box;
   };
 
@@ -393,7 +392,6 @@ button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size
       "payment *", "publickey-credentials-get *", "storage-access *",
     ].join("; ")
   );
-  frame.allowFullscreen = true;
 
   // === Anti-pub : sandbox sans allow-popups / allow-top-navigation (bloque popups et redirections) ===
   const SANDBOX = "allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-modals allow-downloads allow-presentation allow-orientation-lock";
